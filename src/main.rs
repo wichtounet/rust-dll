@@ -58,8 +58,8 @@ impl DenseLayer {
         Self {
             input_size,
             output_size,
-            weights: Matrix2d::<f32>::new(input_size, output_size),
-            biases: Vector::<f32>::new(output_size), // 0 is a good initialization for biases
+            weights: Matrix2d::<f32>::new(input_size, output_size), // TODO Init Weights
+            biases: Vector::<f32>::new(output_size),                // 0 is a good initialization for biases
         }
     }
 }
