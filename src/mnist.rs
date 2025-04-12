@@ -96,7 +96,7 @@ pub fn read_mnist_categorical_labels(train: bool) -> Vec<Vector<f32>> {
     labels
 }
 
-pub fn images_1d_to_batches(images: &Vec<Vector<f32>>, batch_size: usize) -> Vec<Matrix2d<f32>> {
+pub fn images_1d_to_batches(images: &[Vector<f32>], batch_size: usize) -> Vec<Matrix2d<f32>> {
     let mut batches = Vec::<Matrix2d<f32>>::new();
 
     let end = (images.len() / batch_size) * batch_size;
@@ -116,7 +116,7 @@ pub fn images_1d_to_batches(images: &Vec<Vector<f32>>, batch_size: usize) -> Vec
     batches
 }
 
-pub fn labels_to_batches(labels: &Vec<f32>, batch_size: usize) -> Vec<Vector<f32>> {
+pub fn labels_to_batches(labels: &[f32], batch_size: usize) -> Vec<Vector<f32>> {
     let mut batches = Vec::<Vector<f32>>::new();
 
     let end = (labels.len() / batch_size) * batch_size;
@@ -134,7 +134,7 @@ pub fn labels_to_batches(labels: &Vec<f32>, batch_size: usize) -> Vec<Vector<f32
     batches
 }
 
-pub fn categorical_labels_to_batches(labels: &Vec<Vector<f32>>, batch_size: usize) -> Vec<Matrix2d<f32>> {
+pub fn categorical_labels_to_batches(labels: &[Vector<f32>], batch_size: usize) -> Vec<Matrix2d<f32>> {
     let mut batches = Vec::<Matrix2d<f32>>::new();
 
     let end = (labels.len() / batch_size) * batch_size;
