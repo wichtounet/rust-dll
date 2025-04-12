@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::prelude::*;
 
+use etl::bias_add_expr::bias_add;
+use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
 use etl::vector::Vector;
 
@@ -41,9 +43,32 @@ fn read_mnist_images_1d(train: bool) -> Vec<Vector<f32>> {
     images
 }
 
+fn images_1d_to_batches(images: &Vec<Vector<f32>>, batch_size: usize) -> Vec<Matrix2d<f32>> {
+    let mut batches = Vec::<Matrix2d<f32>>::new();
+
+    let end = (images.len() / batch_size) * batch_size;
+
+    for b in (0..end).step_by(batch_size) {
+        let mut batch = Matrix2d::<f32>::new(batch_size, images[b].size());
+
+        for i in 0..batch_size {
+            for p in 0..images[b + i].size() {
+                *batch.at_mut(i, p) = images[b + i].at(p);
+            }
+        }
+
+        batches.push(batch);
+    }
+
+    batches
+}
+
 pub trait Layer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
     fn new_output(&self) -> Vector<f32>;
+
+    fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
+    fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
 }
 
 pub struct DenseLayer {
@@ -72,6 +97,14 @@ impl Layer for DenseLayer {
     fn new_output(&self) -> Vector<f32> {
         Vector::<f32>::new(self.output_size)
     }
+
+    fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        *output |= bias_add(input * &self.weights, &self.biases);
+    }
+
+    fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32> {
+        Matrix2d::<f32>::new(batch_size, self.output_size)
+    }
 }
 
 pub struct Network {
@@ -91,6 +124,10 @@ impl Network {
         self.layers.last().expect("No layers").new_output()
     }
 
+    pub fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32> {
+        self.layers.last().expect("No layers").new_batch_output(batch_size)
+    }
+
     pub fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
         self.forward_one_impl(0, input, output);
     }
@@ -102,6 +139,20 @@ impl Network {
             self.forward_one_impl(layer + 1, &next_output, output);
         } else {
             self.layers[layer].forward_one(input, output);
+        }
+    }
+
+    pub fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.forward_batch_impl(0, input, output);
+    }
+
+    fn forward_batch_impl(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        if layer < self.layers.len() - 1 {
+            let mut next_output = self.layers[layer].new_batch_output(input.rows());
+            self.layers[layer].forward_batch(input, &mut next_output);
+            self.forward_batch_impl(layer + 1, &next_output, output);
+        } else {
+            self.layers[layer].forward_batch(input, output);
         }
     }
 }
@@ -129,4 +180,14 @@ fn main() {
     let mut output = mlp.new_output();
 
     mlp.forward_one(test_images.first().expect("No test images"), &mut output);
+
+    let test_batches = images_1d_to_batches(&test_images, 256);
+    let train_batches = images_1d_to_batches(&train_images, 256);
+
+    println!("Train batches: {}", train_batches.len());
+    println!("Test batches: {}", test_batches.len());
+
+    let mut batch_output = mlp.new_batch_output(256);
+
+    mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 }
