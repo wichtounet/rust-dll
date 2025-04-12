@@ -5,9 +5,9 @@ use etl::vector::Vector;
 
 pub trait Layer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
-    fn new_output(&self) -> Vector<f32>;
-
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
+
+    fn new_output(&self) -> Vector<f32>;
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
 }
 
@@ -34,12 +34,12 @@ impl Layer for DenseLayer {
         *output |= input * &self.weights + &self.biases;
     }
 
-    fn new_output(&self) -> Vector<f32> {
-        Vector::<f32>::new(self.output_size)
-    }
-
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
         *output |= bias_add(input * &self.weights, &self.biases);
+    }
+
+    fn new_output(&self) -> Vector<f32> {
+        Vector::<f32>::new(self.output_size)
     }
 
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32> {
