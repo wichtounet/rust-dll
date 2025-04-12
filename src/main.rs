@@ -4,8 +4,7 @@ use network::Network;
 mod mnist;
 mod network;
 
-use crate::mnist::images_1d_to_batches;
-use crate::mnist::read_mnist_images_1d;
+use crate::mnist::*;
 
 fn main() {
     println!("Hello, world!");
@@ -15,6 +14,12 @@ fn main() {
 
     println!("Train images: {}", train_images.len());
     println!("Test images: {}", test_images.len());
+
+    let train_labels = read_mnist_labels(true);
+    let test_labels = read_mnist_labels(false);
+
+    println!("Train labels: {}", train_labels.len());
+    println!("Test labels: {}", test_labels.len());
 
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));

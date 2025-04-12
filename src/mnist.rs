@@ -33,13 +33,39 @@ pub fn read_mnist_images_1d(train: bool) -> Vec<Vector<f32>> {
         let mut image = Vector::<f32>::new((rows * columns) as usize);
 
         for c in 0..(rows * columns) as usize {
-            image[c] = data[12 + i * rows * columns + c] as f32;
+            image[c] = data[16 + i * rows * columns + c] as f32;
         }
 
         images.push(image);
     }
 
     images
+}
+
+pub fn read_mnist_labels(train: bool) -> Vec<f32> {
+    let mut data: Vec<u8> = Vec::new();
+
+    let path = if train { "datasets/train-labels-idx1-ubyte" } else { "datasets/t10k-labels-idx1-ubyte" };
+
+    let mut f = File::open(path).expect("File not found");
+    f.read_to_end(&mut data).expect("Cannot read the file");
+
+    let magic = read_header(&data, 0);
+
+    if magic != 0x801 {
+        panic!("Invalid magic number in MNIST file");
+    }
+
+    let count = read_header(&data, 4) as usize;
+
+    let mut labels = Vec::<f32>::new();
+
+    for i in 0..count {
+        let label = data[8 + i] as f32;
+        labels.push(label);
+    }
+
+    labels
 }
 
 pub fn images_1d_to_batches(images: &Vec<Vector<f32>>, batch_size: usize) -> Vec<Matrix2d<f32>> {
