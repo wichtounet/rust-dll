@@ -21,20 +21,13 @@ fn main() {
     println!("Train labels: {}", train_labels.len());
     println!("Test labels: {}", test_labels.len());
 
+    println!("Test label 0: {}", test_labels.first().expect("No labels"));
+
     let train_cat_labels = read_mnist_categorical_labels(true);
     let test_cat_labels = read_mnist_categorical_labels(false);
 
     println!("Cat. Train labels: {}", train_cat_labels.len());
     println!("Cat. Test labels: {}", test_cat_labels.len());
-
-    let mut mlp = Network::new();
-    mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new(500, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new_softmax(500, 10)));
-
-    let mut output = mlp.new_output();
-
-    mlp.forward_one(test_images.first().expect("No test images"), &mut output);
 
     let test_batches = images_1d_to_batches(&test_images, 256);
     let train_batches = images_1d_to_batches(&train_images, 256);
@@ -53,6 +46,15 @@ fn main() {
 
     println!("Cat. Train label batches: {}", train_cat_label_batches.len());
     println!("Cat. Test label batches: {}", test_cat_label_batches.len());
+
+    let mut mlp = Network::new();
+    mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
+    mlp.add_layer(Box::new(DenseLayer::new(500, 500)));
+    mlp.add_layer(Box::new(DenseLayer::new_softmax(500, 10)));
+
+    let mut output = mlp.new_output();
+
+    mlp.forward_one(test_images.first().expect("No test images"), &mut output);
 
     let mut batch_output = mlp.new_batch_output(256);
 
