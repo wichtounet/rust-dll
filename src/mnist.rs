@@ -68,6 +68,34 @@ pub fn read_mnist_labels(train: bool) -> Vec<f32> {
     labels
 }
 
+pub fn read_mnist_categorical_labels(train: bool) -> Vec<Vector<f32>> {
+    let mut data: Vec<u8> = Vec::new();
+
+    let path = if train { "datasets/train-labels-idx1-ubyte" } else { "datasets/t10k-labels-idx1-ubyte" };
+
+    let mut f = File::open(path).expect("File not found");
+    f.read_to_end(&mut data).expect("Cannot read the file");
+
+    let magic = read_header(&data, 0);
+
+    if magic != 0x801 {
+        panic!("Invalid magic number in MNIST file");
+    }
+
+    let count = read_header(&data, 4) as usize;
+
+    let mut labels = Vec::<Vector<f32>>::new();
+
+    for i in 0..count {
+        let mut cat_label = Vector::<f32>::new(10); // This is initialized to zero
+        let label = data[8 + i] as usize;
+        *cat_label.at_mut(label) = 1.0;
+        labels.push(cat_label);
+    }
+
+    labels
+}
+
 pub fn images_1d_to_batches(images: &Vec<Vector<f32>>, batch_size: usize) -> Vec<Matrix2d<f32>> {
     let mut batches = Vec::<Matrix2d<f32>>::new();
 
@@ -98,6 +126,26 @@ pub fn labels_to_batches(labels: &Vec<f32>, batch_size: usize) -> Vec<Vector<f32
 
         for i in 0..batch_size {
             *batch.at_mut(i) = labels[b + i];
+        }
+
+        batches.push(batch);
+    }
+
+    batches
+}
+
+pub fn categorical_labels_to_batches(labels: &Vec<Vector<f32>>, batch_size: usize) -> Vec<Matrix2d<f32>> {
+    let mut batches = Vec::<Matrix2d<f32>>::new();
+
+    let end = (labels.len() / batch_size) * batch_size;
+
+    for b in (0..end).step_by(batch_size) {
+        let mut batch = Matrix2d::<f32>::new(batch_size, 10);
+
+        for i in 0..batch_size {
+            for l in 0..10 {
+                *batch.at_mut(i, l) = labels[b + i].at(l);
+            }
         }
 
         batches.push(batch);

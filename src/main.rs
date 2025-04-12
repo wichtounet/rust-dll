@@ -21,6 +21,12 @@ fn main() {
     println!("Train labels: {}", train_labels.len());
     println!("Test labels: {}", test_labels.len());
 
+    let train_cat_labels = read_mnist_categorical_labels(true);
+    let test_cat_labels = read_mnist_categorical_labels(false);
+
+    println!("Cat. Train labels: {}", train_cat_labels.len());
+    println!("Cat. Test labels: {}", test_cat_labels.len());
+
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
     mlp.add_layer(Box::new(DenseLayer::new(500, 500)));
@@ -41,6 +47,12 @@ fn main() {
 
     println!("Train label batches: {}", train_label_batches.len());
     println!("Test label batches: {}", test_label_batches.len());
+
+    let test_cat_label_batches = categorical_labels_to_batches(&test_cat_labels, 256);
+    let train_cat_label_batches = categorical_labels_to_batches(&train_cat_labels, 256);
+
+    println!("Cat. Train label batches: {}", train_cat_label_batches.len());
+    println!("Cat. Test label batches: {}", test_cat_label_batches.len());
 
     let mut batch_output = mlp.new_batch_output(256);
 
