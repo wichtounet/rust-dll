@@ -36,6 +36,12 @@ fn main() {
     println!("Train batches: {}", train_batches.len());
     println!("Test batches: {}", test_batches.len());
 
+    let test_label_batches = labels_to_batches(&test_labels, 256);
+    let train_label_batches = labels_to_batches(&train_labels, 256);
+
+    println!("Train label batches: {}", train_label_batches.len());
+    println!("Test label batches: {}", test_label_batches.len());
+
     let mut batch_output = mlp.new_batch_output(256);
 
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);

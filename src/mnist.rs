@@ -87,3 +87,21 @@ pub fn images_1d_to_batches(images: &Vec<Vector<f32>>, batch_size: usize) -> Vec
 
     batches
 }
+
+pub fn labels_to_batches(labels: &Vec<f32>, batch_size: usize) -> Vec<Vector<f32>> {
+    let mut batches = Vec::<Vector<f32>>::new();
+
+    let end = (labels.len() / batch_size) * batch_size;
+
+    for b in (0..end).step_by(batch_size) {
+        let mut batch = Vector::<f32>::new(batch_size);
+
+        for i in 0..batch_size {
+            *batch.at_mut(i) = labels[b + i];
+        }
+
+        batches.push(batch);
+    }
+
+    batches
+}
