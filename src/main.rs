@@ -19,7 +19,7 @@ fn main() {
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
     mlp.add_layer(Box::new(DenseLayer::new(500, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new(500, 10)));
+    mlp.add_layer(Box::new(DenseLayer::new_softmax(500, 10)));
 
     let mut output = mlp.new_output();
 

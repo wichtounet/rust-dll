@@ -1,7 +1,15 @@
 use etl::bias_add_expr::bias_add;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
+use etl::sigmoid_expr::sigmoid;
+use etl::softmax_expr::softmax;
 use etl::vector::Vector;
+
+#[derive(PartialEq)]
+pub enum Activation {
+    Sigmoid,
+    Softmax,
+}
 
 pub trait Layer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
@@ -16,6 +24,7 @@ pub struct DenseLayer {
     output_size: usize,
     weights: Matrix2d<f32>,
     biases: Vector<f32>,
+    activation: Activation,
 }
 
 impl DenseLayer {
@@ -25,17 +34,36 @@ impl DenseLayer {
             output_size,
             weights: Matrix2d::<f32>::new(input_size, output_size), // TODO Init Weights
             biases: Vector::<f32>::new(output_size),                // 0 is a good initialization for biases
+            activation: Activation::Sigmoid,
+        }
+    }
+
+    pub fn new_softmax(input_size: usize, output_size: usize) -> Self {
+        Self {
+            input_size,
+            output_size,
+            weights: Matrix2d::<f32>::new(input_size, output_size), // TODO Init Weights
+            biases: Vector::<f32>::new(output_size),                // 0 is a good initialization for biases
+            activation: Activation::Softmax,
         }
     }
 }
 
 impl Layer for DenseLayer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
-        *output |= input * &self.weights + &self.biases;
+        if self.activation == Activation::Sigmoid {
+            *output |= sigmoid(input * &self.weights + &self.biases);
+        } else {
+            *output |= softmax(input * &self.weights + &self.biases);
+        }
     }
 
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
-        *output |= bias_add(input * &self.weights, &self.biases);
+        if self.activation == Activation::Sigmoid {
+            *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
+        } else {
+            *output |= softmax(bias_add(input * &self.weights, &self.biases));
+        }
     }
 
     fn new_output(&self) -> Vector<f32> {
