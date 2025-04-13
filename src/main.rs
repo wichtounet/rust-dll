@@ -21,8 +21,6 @@ fn main() {
     println!("Train labels: {}", train_labels.len());
     println!("Test labels: {}", test_labels.len());
 
-    println!("Test label 0: {}", test_labels.first().expect("No labels"));
-
     let train_cat_labels = read_mnist_categorical_labels(true);
     let test_cat_labels = read_mnist_categorical_labels(false);
 
@@ -46,6 +44,9 @@ fn main() {
 
     println!("Cat. Train label batches: {}", train_cat_label_batches.len());
     println!("Cat. Test label batches: {}", test_cat_label_batches.len());
+
+    println!("Test label 0: {}", test_labels.first().expect("No labels"));
+    println!("Test label 0: {}", test_cat_labels.first().expect("No labels"));
 
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
