@@ -1,3 +1,5 @@
+use etl::etl_expr::EtlExpr;
+use etl::matrix_2d::Matrix2d;
 use network::DenseLayer;
 use network::Network;
 
@@ -5,6 +7,50 @@ mod mnist;
 mod network;
 
 use crate::mnist::*;
+
+struct Sgd<'a> {
+    network: &'a mut Network,
+    outputs: Vec<Option<Matrix2d<f32>>>,
+}
+
+impl<'a> Sgd<'a> {
+    fn new(network: &'a mut Network) -> Self {
+        Self { network, outputs: Vec::new() }
+    }
+
+    fn train_batch(&mut self, epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) {
+        let layers = self.network.layers();
+
+        // Lazy initialization of the outputs
+        if self.outputs.is_empty() {
+            for layer in 0..layers {
+                self.outputs.push(Some(self.network.new_layer_batch_output(input_batch.rows(), layer)));
+            }
+        }
+
+        // Forward propagation of the batch
+
+        // This uses a somewhat idiomatic way of doing things with Rust
+        // Since we can't borrow two elements of the same vector immutably and mutably at the same
+        // time, we must take ownership of them when we need them and then put them back
+
+        for layer in 0..layers {
+            let mut output = self.outputs[layer].take().expect("B");
+
+            if layer == 0 {
+                self.network.forward_batch_layer(layer, input_batch, &mut output);
+            } else {
+                let input = self.outputs[layer - 1].take().expect("A");
+                self.network.forward_batch_layer(layer, &input, &mut output);
+                self.outputs[layer - 1] = Some(input);
+            }
+
+            self.outputs[layer] = Some(output);
+        }
+
+        // TODO Compute the errors of the last layer
+    }
+}
 
 fn main() {
     println!("Hello, world!");
@@ -60,4 +106,7 @@ fn main() {
     let mut batch_output = mlp.new_batch_output(256);
 
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
+
+    let mut trainer = Sgd::new(&mut mlp);
+    trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches"));
 }

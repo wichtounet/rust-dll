@@ -15,6 +15,8 @@ pub trait Layer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
 
+    //fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>);
+
     fn new_output(&self) -> Vector<f32>;
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
 }
@@ -84,12 +86,20 @@ impl Network {
         Self { layers: Vec::new() }
     }
 
+    pub fn layers(&self) -> usize {
+        self.layers.len()
+    }
+
     pub fn add_layer(&mut self, layer: Box<dyn Layer>) {
         self.layers.push(layer);
     }
 
     pub fn new_output(&self) -> Vector<f32> {
         self.layers.last().expect("No layers").new_output()
+    }
+
+    pub fn new_layer_batch_output(&self, batch_size: usize, layer: usize) -> Matrix2d<f32> {
+        self.layers[layer].new_batch_output(batch_size)
     }
 
     pub fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32> {
@@ -122,6 +132,10 @@ impl Network {
         } else {
             self.layers[layer].forward_batch(input, output);
         }
+    }
+
+    pub fn forward_batch_layer(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.layers[layer].forward_batch(input, output);
     }
 }
 
