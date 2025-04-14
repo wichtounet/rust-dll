@@ -32,8 +32,8 @@ impl DenseLayer {
         Self {
             input_size,
             output_size,
-            weights: Matrix2d::<f32>::new(input_size, output_size), // TODO Init Weights
-            biases: Vector::<f32>::new(output_size),                // 0 is a good initialization for biases
+            weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
+            biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
             activation: Activation::Sigmoid,
         }
     }
@@ -42,8 +42,8 @@ impl DenseLayer {
         Self {
             input_size,
             output_size,
-            weights: Matrix2d::<f32>::new(input_size, output_size), // TODO Init Weights
-            biases: Vector::<f32>::new(output_size),                // 0 is a good initialization for biases
+            weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
+            biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
             activation: Activation::Softmax,
         }
     }
