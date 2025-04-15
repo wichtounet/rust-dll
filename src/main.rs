@@ -80,8 +80,16 @@ impl<'a> Sgd<'a> {
             let mut errors = self.errors[layer].take()?;
             let outputs = self.outputs[layer].take()?;
 
+            // All layers but the last need to adapt errors for the derivative
             if layer != last_layer {
                 self.network.get_layer(layer).adapt_errors(&outputs, &mut errors);
+            }
+
+            // All layers but the first need back propagation
+            if layer > 0 {
+                let mut back_errors = self.errors[layer - 1].take()?;
+                self.network.get_layer(layer).backward_batch(&mut back_errors, &errors);
+                self.errors[layer - 1] = Some(back_errors);
             }
 
             self.outputs[layer] = Some(outputs);

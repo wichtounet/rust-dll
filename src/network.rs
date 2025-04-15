@@ -4,6 +4,7 @@ use etl::matrix_2d::Matrix2d;
 use etl::sigmoid_derivative_expr::sigmoid_derivative;
 use etl::sigmoid_expr::sigmoid;
 use etl::softmax_expr::softmax;
+use etl::transpose_expr::transpose;
 use etl::vector::Vector;
 
 #[derive(PartialEq)]
@@ -17,6 +18,7 @@ pub trait Layer {
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
 
     fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>);
+    fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>);
 
     fn new_output(&self) -> Vector<f32>;
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
@@ -84,6 +86,10 @@ impl Layer for DenseLayer {
         }
 
         // THe derivative of softmax is 1.0
+    }
+
+    fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>) {
+        *output |= errors * transpose(&self.weights);
     }
 }
 
