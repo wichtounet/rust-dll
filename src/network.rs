@@ -1,4 +1,6 @@
+use etl::batch_outer_expr::batch_outer;
 use etl::bias_add_expr::bias_add;
+use etl::bias_batch_sum_expr::bias_batch_sum;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
 use etl::sigmoid_derivative_expr::sigmoid_derivative;
@@ -22,6 +24,15 @@ pub trait Layer {
 
     fn new_output(&self) -> Vector<f32>;
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
+
+    fn new_b_gradients(&self) -> Vector<f32>;
+    fn new_w_gradients(&self) -> Matrix2d<f32>;
+
+    fn compute_w_gradients(&self, gradients: &mut Matrix2d<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>);
+    fn compute_b_gradients(&self, gradients: &mut Vector<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>);
+
+    fn apply_w_gradients(&mut self, gradients: &Matrix2d<f32>);
+    fn apply_b_gradients(&mut self, gradients: &Vector<f32>);
 }
 
 pub struct DenseLayer {
@@ -89,6 +100,30 @@ impl Layer for DenseLayer {
 
     fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>) {
         *output |= errors * transpose(&self.weights);
+    }
+
+    fn new_b_gradients(&self) -> Vector<f32> {
+        Vector::<f32>::new(self.output_size)
+    }
+
+    fn new_w_gradients(&self) -> Matrix2d<f32> {
+        Matrix2d::<f32>::new(self.input_size, self.output_size)
+    }
+
+    fn compute_w_gradients(&self, gradients: &mut Matrix2d<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>) {
+        *gradients |= batch_outer(input, errors)
+    }
+
+    fn compute_b_gradients(&self, gradients: &mut Vector<f32>, _input: &Matrix2d<f32>, errors: &Matrix2d<f32>) {
+        *gradients |= bias_batch_sum(errors)
+    }
+
+    fn apply_w_gradients(&mut self, gradients: &Matrix2d<f32>) {
+        self.weights += gradients;
+    }
+
+    fn apply_b_gradients(&mut self, gradients: &Vector<f32>) {
+        self.biases += gradients;
     }
 }
 

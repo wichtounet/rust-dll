@@ -1,5 +1,7 @@
+use etl::constant::cst;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
+use etl::vector::Vector;
 use network::DenseLayer;
 use network::Network;
 
@@ -13,7 +15,9 @@ struct Sgd<'a> {
     outputs: Vec<Option<Matrix2d<f32>>>,
     errors: Vec<Option<Matrix2d<f32>>>,
     w_gradients: Vec<Option<Matrix2d<f32>>>,
-    b_gradients: Vec<Option<Matrix2d<f32>>>,
+    b_gradients: Vec<Option<Vector<f32>>>,
+    batch_size: usize,
+    learning_rate: f32,
 }
 
 impl<'a> Sgd<'a> {
@@ -24,6 +28,8 @@ impl<'a> Sgd<'a> {
             errors: Vec::new(),
             w_gradients: Vec::new(),
             b_gradients: Vec::new(),
+            batch_size,
+            learning_rate: 0.09,
         };
 
         let layers = trainer.network.layers();
@@ -36,6 +42,12 @@ impl<'a> Sgd<'a> {
         // initialization of the errors
         for layer in 0..layers {
             trainer.errors.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
+        }
+
+        // initialization of the gradients
+        for layer in 0..layers {
+            trainer.w_gradients.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
+            trainer.b_gradients.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
         }
 
         trainer
@@ -99,6 +111,49 @@ impl<'a> Sgd<'a> {
             self.errors[layer] = Some(errors);
         }
 
+        // Compute the gradients
+
+        for layer in 0..layers {
+            let mut w_gradients = self.w_gradients[layer].take()?;
+            let mut b_gradients = self.b_gradients[layer].take()?;
+            let errors = self.errors[layer].take()?;
+
+            if layer == 0 {
+                self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, input_batch, &errors);
+                self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, input_batch, &errors);
+            } else {
+                let input = self.outputs[layer - 1].take()?;
+
+                self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, &input, &errors);
+                self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, &input, &errors);
+
+                self.outputs[layer - 1] = Some(input);
+            }
+
+            self.errors[layer] = Some(errors);
+            self.b_gradients[layer] = Some(b_gradients);
+            self.w_gradients[layer] = Some(w_gradients);
+        }
+
+        // Here we could apply gradients decay
+
+        // Apply the gradients
+        for layer in 0..layers {
+            let mut w_gradients = self.w_gradients[layer].take()?;
+            let mut b_gradients = self.b_gradients[layer].take()?;
+
+            w_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
+            b_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
+
+            self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
+            self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
+
+            self.b_gradients[layer] = Some(b_gradients);
+            self.w_gradients[layer] = Some(w_gradients);
+        }
+
+        //std::tie(batch_loss, batch_error) = etl::ml::cce(output, labels, -1.0f / s, 1.0f / s);
+
         // TODO Compute errror and loss
         Some((0.0, 0.0))
     }
@@ -161,7 +216,7 @@ fn main() {
 
     let mut trainer = Sgd::new(&mut mlp, 256);
     match trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches")) {
-        Some((error, loss)) => println!("error: {error} loss: {loss}"),
+        Some((loss, error)) => println!("error: {error} loss: {loss}"),
         None => println!("Something went wrong during training"),
     }
 }
