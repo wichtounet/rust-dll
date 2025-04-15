@@ -1,6 +1,7 @@
 use etl::bias_add_expr::bias_add;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
+use etl::sigmoid_derivative_expr::sigmoid_derivative;
 use etl::sigmoid_expr::sigmoid;
 use etl::softmax_expr::softmax;
 use etl::vector::Vector;
@@ -15,7 +16,7 @@ pub trait Layer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
 
-    //fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>);
+    fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>);
 
     fn new_output(&self) -> Vector<f32>;
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
@@ -75,6 +76,15 @@ impl Layer for DenseLayer {
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32> {
         Matrix2d::<f32>::new(batch_size, self.output_size)
     }
+
+    fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>) {
+        if self.activation == Activation::Sigmoid {
+            let errors_copy = Matrix2d::<f32>::new_copy(errors);
+            *errors |= sigmoid_derivative(output) >> &errors_copy;
+        }
+
+        // THe derivative of softmax is 1.0
+    }
 }
 
 pub struct Network {
@@ -92,6 +102,14 @@ impl Network {
 
     pub fn add_layer(&mut self, layer: Box<dyn Layer>) {
         self.layers.push(layer);
+    }
+
+    pub fn get_layer(&mut self, layer: usize) -> &Box<dyn Layer> {
+        &self.layers[layer]
+    }
+
+    pub fn get_layer_mut(&mut self, layer: usize) -> &mut Box<dyn Layer> {
+        &mut self.layers[layer]
     }
 
     pub fn new_output(&self) -> Vector<f32> {

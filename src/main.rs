@@ -25,19 +25,20 @@ impl<'a> Sgd<'a> {
 
     fn train_batch(&mut self, epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
         let layers = self.network.layers();
+        let last_layer = layers - 1;
         let batch_size = input_batch.rows();
 
         // Lazy initialization of the outputs
         if self.outputs.is_empty() {
             for layer in 0..layers {
-                self.outputs.push(Some(self.network.new_layer_batch_output(batch_size, layer)));
+                self.outputs.push(Some(self.network.get_layer(layer).new_batch_output(batch_size)));
             }
         }
 
         // Lazy initialization of the errors
         if self.errors.is_empty() {
             for layer in 0..layers {
-                self.errors.push(Some(self.network.new_layer_batch_output(batch_size, layer)));
+                self.errors.push(Some(self.network.get_layer(layer).new_batch_output(batch_size)));
             }
         }
 
@@ -51,10 +52,10 @@ impl<'a> Sgd<'a> {
             let mut output = self.outputs[layer].take()?;
 
             if layer == 0 {
-                self.network.forward_batch_layer(layer, input_batch, &mut output);
+                self.network.get_layer(layer).forward_batch(input_batch, &mut output);
             } else {
                 let input = self.outputs[layer - 1].take()?;
-                self.network.forward_batch_layer(layer, &input, &mut output);
+                self.network.get_layer(layer).forward_batch(&input, &mut output);
                 self.outputs[layer - 1] = Some(input);
             }
 
@@ -64,13 +65,27 @@ impl<'a> Sgd<'a> {
         // Compute the errors of the last layer with categorical cross entropy loss
 
         {
-            let mut last_errors = self.errors[layers - 1].take()?;
-            let last_output = self.outputs[layers - 1].take()?;
+            let mut last_errors = self.errors[last_layer].take()?;
+            let last_output = self.outputs[last_layer].take()?;
 
             last_errors |= label_batch - &last_output;
 
-            self.outputs[layers - 1] = Some(last_output);
-            self.errors[layers - 1] = Some(last_errors);
+            self.outputs[last_layer] = Some(last_output);
+            self.errors[last_layer] = Some(last_errors);
+        }
+
+        // Backward propagation of the errors
+
+        for layer in (0..layers).rev() {
+            let mut errors = self.errors[layer].take()?;
+            let outputs = self.outputs[layer].take()?;
+
+            if layer != last_layer {
+                self.network.get_layer(layer).adapt_errors(&outputs, &mut errors);
+            }
+
+            self.outputs[layer] = Some(outputs);
+            self.errors[layer] = Some(errors);
         }
 
         // TODO Compute errror and loss
