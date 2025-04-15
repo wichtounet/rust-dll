@@ -12,35 +12,38 @@ struct Sgd<'a> {
     network: &'a mut Network,
     outputs: Vec<Option<Matrix2d<f32>>>,
     errors: Vec<Option<Matrix2d<f32>>>,
+    w_gradients: Vec<Option<Matrix2d<f32>>>,
+    b_gradients: Vec<Option<Matrix2d<f32>>>,
 }
 
 impl<'a> Sgd<'a> {
-    fn new(network: &'a mut Network) -> Self {
-        Self {
+    fn new(network: &'a mut Network, batch_size: usize) -> Self {
+        let mut trainer = Self {
             network,
             outputs: Vec::new(),
             errors: Vec::new(),
+            w_gradients: Vec::new(),
+            b_gradients: Vec::new(),
+        };
+
+        let layers = trainer.network.layers();
+
+        // initialization of the outputs
+        for layer in 0..layers {
+            trainer.outputs.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
         }
+
+        // initialization of the errors
+        for layer in 0..layers {
+            trainer.errors.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
+        }
+
+        trainer
     }
 
     fn train_batch(&mut self, epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
         let layers = self.network.layers();
         let last_layer = layers - 1;
-        let batch_size = input_batch.rows();
-
-        // Lazy initialization of the outputs
-        if self.outputs.is_empty() {
-            for layer in 0..layers {
-                self.outputs.push(Some(self.network.get_layer(layer).new_batch_output(batch_size)));
-            }
-        }
-
-        // Lazy initialization of the errors
-        if self.errors.is_empty() {
-            for layer in 0..layers {
-                self.errors.push(Some(self.network.get_layer(layer).new_batch_output(batch_size)));
-            }
-        }
 
         // Forward propagation of the batch
 
@@ -156,7 +159,7 @@ fn main() {
 
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 
-    let mut trainer = Sgd::new(&mut mlp);
+    let mut trainer = Sgd::new(&mut mlp, 256);
     match trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches")) {
         Some((error, loss)) => println!("error: {error} loss: {loss}"),
         None => println!("Something went wrong during training"),
