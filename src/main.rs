@@ -11,20 +11,33 @@ use crate::mnist::*;
 struct Sgd<'a> {
     network: &'a mut Network,
     outputs: Vec<Option<Matrix2d<f32>>>,
+    errors: Vec<Option<Matrix2d<f32>>>,
 }
 
 impl<'a> Sgd<'a> {
     fn new(network: &'a mut Network) -> Self {
-        Self { network, outputs: Vec::new() }
+        Self {
+            network,
+            outputs: Vec::new(),
+            errors: Vec::new(),
+        }
     }
 
-    fn train_batch(&mut self, epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) {
+    fn train_batch(&mut self, epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
         let layers = self.network.layers();
+        let batch_size = input_batch.rows();
 
         // Lazy initialization of the outputs
         if self.outputs.is_empty() {
             for layer in 0..layers {
-                self.outputs.push(Some(self.network.new_layer_batch_output(input_batch.rows(), layer)));
+                self.outputs.push(Some(self.network.new_layer_batch_output(batch_size, layer)));
+            }
+        }
+
+        // Lazy initialization of the errors
+        if self.errors.is_empty() {
+            for layer in 0..layers {
+                self.errors.push(Some(self.network.new_layer_batch_output(batch_size, layer)));
             }
         }
 
@@ -35,12 +48,12 @@ impl<'a> Sgd<'a> {
         // time, we must take ownership of them when we need them and then put them back
 
         for layer in 0..layers {
-            let mut output = self.outputs[layer].take().expect("B");
+            let mut output = self.outputs[layer].take()?;
 
             if layer == 0 {
                 self.network.forward_batch_layer(layer, input_batch, &mut output);
             } else {
-                let input = self.outputs[layer - 1].take().expect("A");
+                let input = self.outputs[layer - 1].take()?;
                 self.network.forward_batch_layer(layer, &input, &mut output);
                 self.outputs[layer - 1] = Some(input);
             }
@@ -48,7 +61,20 @@ impl<'a> Sgd<'a> {
             self.outputs[layer] = Some(output);
         }
 
-        // TODO Compute the errors of the last layer
+        // Compute the errors of the last layer with categorical cross entropy loss
+
+        {
+            let mut last_errors = self.errors[layers - 1].take()?;
+            let last_output = self.outputs[layers - 1].take()?;
+
+            last_errors |= label_batch - &last_output;
+
+            self.outputs[layers - 1] = Some(last_output);
+            self.errors[layers - 1] = Some(last_errors);
+        }
+
+        // TODO Compute errror and loss
+        Some((0.0, 0.0))
     }
 }
 
@@ -108,5 +134,8 @@ fn main() {
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 
     let mut trainer = Sgd::new(&mut mlp);
-    trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches"));
+    match trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches")) {
+        Some((error, loss)) => println!("error: {error} loss: {loss}"),
+        None => println!("Something went wrong during training"),
+    }
 }
