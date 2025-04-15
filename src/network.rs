@@ -81,8 +81,7 @@ impl Layer for DenseLayer {
 
     fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>) {
         if self.activation == Activation::Sigmoid {
-            let errors_copy = Matrix2d::<f32>::new_copy(errors);
-            *errors |= sigmoid_derivative(output) >> &errors_copy;
+            *errors >>= sigmoid_derivative(output);
         }
 
         // THe derivative of softmax is 1.0
