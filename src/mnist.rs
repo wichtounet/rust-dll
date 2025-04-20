@@ -99,10 +99,11 @@ pub fn read_mnist_categorical_labels(train: bool) -> Vec<Vector<f32>> {
 }
 
 pub fn normalize_images_1d(images: &mut [Vector<f32>]) {
-    let size = images.len();
+    let n_images = images.len();
 
-    for i in 0..size {
+    for i in 0..n_images {
         let image = &mut images[i];
+        let size = image.size();
 
         // TODO Once rust-etl supports it on f32, use mean/stddev
 
