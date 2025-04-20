@@ -193,6 +193,8 @@ impl<'a> Sgd<'a> {
 }
 
 fn main() {
+    let batch_size = 100;
+
     println!("Hello, world!");
 
     let mut train_images = read_mnist_images_1d(true);
@@ -216,20 +218,20 @@ fn main() {
     println!("Cat. Train labels: {}", train_cat_labels.len());
     println!("Cat. Test labels: {}", test_cat_labels.len());
 
-    let test_batches = images_1d_to_batches(&test_images, 256);
-    let train_batches = images_1d_to_batches(&train_images, 256);
+    let test_batches = images_1d_to_batches(&test_images, batch_size);
+    let train_batches = images_1d_to_batches(&train_images, batch_size);
 
     println!("Train batches: {}", train_batches.len());
     println!("Test batches: {}", test_batches.len());
 
-    let test_label_batches = labels_to_batches(&test_labels, 256);
-    let train_label_batches = labels_to_batches(&train_labels, 256);
+    let test_label_batches = labels_to_batches(&test_labels, batch_size);
+    let train_label_batches = labels_to_batches(&train_labels, batch_size);
 
     println!("Train label batches: {}", train_label_batches.len());
     println!("Test label batches: {}", test_label_batches.len());
 
-    let test_cat_label_batches = categorical_labels_to_batches(&test_cat_labels, 256);
-    let train_cat_label_batches = categorical_labels_to_batches(&train_cat_labels, 256);
+    let test_cat_label_batches = categorical_labels_to_batches(&test_cat_labels, batch_size);
+    let train_cat_label_batches = categorical_labels_to_batches(&train_cat_labels, batch_size);
 
     println!("Cat. Train label batches: {}", train_cat_label_batches.len());
     println!("Cat. Test label batches: {}", test_cat_label_batches.len());
@@ -239,17 +241,17 @@ fn main() {
 
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new(500, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new_softmax(500, 10)));
+    mlp.add_layer(Box::new(DenseLayer::new(500, 250)));
+    mlp.add_layer(Box::new(DenseLayer::new_softmax(250, 10)));
 
     let mut output = mlp.new_output();
 
     mlp.forward_one(test_images.first().expect("No test images"), &mut output);
 
-    let mut batch_output = mlp.new_batch_output(256);
+    let mut batch_output = mlp.new_batch_output(batch_size);
 
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 
-    let mut trainer = Sgd::new(&mut mlp, 256);
+    let mut trainer = Sgd::new(&mut mlp, batch_size);
     trainer.train(50, &train_batches, &train_cat_label_batches);
 }
