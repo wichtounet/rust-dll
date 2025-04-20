@@ -184,11 +184,14 @@ impl<'a> Sgd<'a> {
 fn main() {
     println!("Hello, world!");
 
-    let train_images = read_mnist_images_1d(true);
-    let test_images = read_mnist_images_1d(false);
+    let mut train_images = read_mnist_images_1d(true);
+    let mut test_images = read_mnist_images_1d(false);
 
     println!("Train images: {}", train_images.len());
     println!("Test images: {}", test_images.len());
+
+    normalize_images_1d(&mut train_images);
+    normalize_images_1d(&mut test_images);
 
     let train_labels = read_mnist_labels(true);
     let test_labels = read_mnist_labels(false);

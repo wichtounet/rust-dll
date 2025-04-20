@@ -1,8 +1,10 @@
 use std::fs::File;
 use std::io::prelude::*;
 
+use etl::constant::cst;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
+use etl::reductions::{mean, sum};
 use etl::vector::Vector;
 
 fn read_header(data: &[u8], pos: usize) -> u32 {
@@ -94,6 +96,32 @@ pub fn read_mnist_categorical_labels(train: bool) -> Vec<Vector<f32>> {
     }
 
     labels
+}
+
+pub fn normalize_images_1d(images: &mut [Vector<f32>]) {
+    let size = images.len();
+
+    for i in 0..size {
+        let image = &mut images[i];
+
+        // TODO Once rust-etl supports it on f32, use mean/stddev
+
+        // Normalize to a mean of zero
+        let m = sum(image) / (size as f32);
+        *image -= cst(m);
+
+        let mut s: f32 = 0.0;
+
+        for i in 0..image.size() {
+            s += image.at(i) * image.at(i);
+        }
+
+        s = (s / (size as f32)).sqrt();
+
+        if s != 0.0 {
+            *image /= cst(s);
+        }
+    }
 }
 
 pub fn images_1d_to_batches(images: &[Vector<f32>], batch_size: usize) -> Vec<Matrix2d<f32>> {
