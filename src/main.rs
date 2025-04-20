@@ -1,6 +1,10 @@
+use etl::abs_expr::abs;
+use etl::argmax_expr::argmax;
 use etl::constant::cst;
-use etl::etl_expr::EtlExpr;
+use etl::log_expr::log;
 use etl::matrix_2d::Matrix2d;
+use etl::min_expr::binary_min;
+use etl::reductions::sum;
 use etl::vector::Vector;
 use network::DenseLayer;
 use network::Network;
@@ -53,7 +57,7 @@ impl<'a> Sgd<'a> {
         trainer
     }
 
-    fn train_batch(&mut self, epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
+    fn train_batch(&mut self, _epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
         let layers = self.network.layers();
         let last_layer = layers - 1;
 
@@ -152,10 +156,15 @@ impl<'a> Sgd<'a> {
             self.w_gradients[layer] = Some(w_gradients);
         }
 
-        //std::tie(batch_loss, batch_error) = etl::ml::cce(output, labels, -1.0f / s, 1.0f / s);
+        let last_output = self.outputs[last_layer].take()?;
 
-        // TODO Compute errror and loss
-        Some((0.0, 0.0))
+        let alpha: f32 = -1.0 / (self.batch_size as f32);
+        let loss: f32 = alpha * sum(&(log(&last_output) >> label_batch));
+
+        let beta: f32 = 1.0 / (self.batch_size as f32);
+        let error: f32 = beta * sum(&(binary_min(abs(argmax(label_batch) - argmax(&last_output)), cst(1.0))));
+
+        Some((loss, error))
     }
 }
 
