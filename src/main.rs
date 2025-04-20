@@ -172,12 +172,23 @@ impl<'a> Sgd<'a> {
     }
 
     fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
-        for i in 0..input_batches.len() - 1 {
+        let batches = input_batches.len();
+
+        for i in 0..batches - 1 {
             let (loss, error) = self.train_batch(epoch, &input_batches[i], &label_batches[i])?;
-            println!("batch error: {error} loss: {loss}");
+            println!("epoch {epoch} batch {i}/{batches} error: {error} loss: {loss}");
         }
 
-        self.train_batch(epoch, &input_batches[input_batches.len() - 1], &label_batches[input_batches.len() - 1])
+        self.train_batch(epoch, &input_batches[batches - 1], &label_batches[batches - 1])
+    }
+
+    fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+        for epoch in 0..epochs - 1 {
+            let (loss, error) = self.train_epoch(epoch, input_batches, label_batches)?;
+            println!("epoch {epoch}/{epochs} error: {error} loss: {loss}");
+        }
+
+        self.train_epoch(epochs - 1, input_batches, label_batches)
     }
 }
 
@@ -240,13 +251,5 @@ fn main() {
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 
     let mut trainer = Sgd::new(&mut mlp, 256);
-    match trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches")) {
-        Some((loss, error)) => println!("epoch error: {error} loss: {loss}"),
-        None => println!("Something went wrong during training"),
-    }
-
-    match trainer.train_epoch(0, &train_batches, &train_cat_label_batches) {
-        Some((loss, error)) => println!("epoch error: {error} loss: {loss}"),
-        None => println!("Something went wrong during epoch training"),
-    }
+    trainer.train(50, &train_batches, &train_cat_label_batches);
 }
