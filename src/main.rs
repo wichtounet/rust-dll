@@ -156,6 +156,8 @@ impl<'a> Sgd<'a> {
             self.w_gradients[layer] = Some(w_gradients);
         }
 
+        // Compute the category cross entropy loss and error
+
         let last_output = self.outputs[last_layer].take()?;
 
         let alpha: f32 = -1.0 / (self.batch_size as f32);
@@ -164,7 +166,18 @@ impl<'a> Sgd<'a> {
         let beta: f32 = 1.0 / (self.batch_size as f32);
         let error: f32 = beta * sum(&(binary_min(abs(argmax(label_batch) - argmax(&last_output)), cst(1.0))));
 
+        self.outputs[last_layer] = Some(last_output);
+
         Some((loss, error))
+    }
+
+    fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+        for i in 0..input_batches.len() - 1 {
+            let (loss, error) = self.train_batch(epoch, &input_batches[i], &label_batches[i])?;
+            println!("batch error: {error} loss: {loss}");
+        }
+
+        self.train_batch(epoch, &input_batches[input_batches.len() - 1], &label_batches[input_batches.len() - 1])
     }
 }
 
@@ -225,7 +238,12 @@ fn main() {
 
     let mut trainer = Sgd::new(&mut mlp, 256);
     match trainer.train_batch(0, train_batches.first().expect("No train batch"), train_cat_label_batches.first().expect("No train batches")) {
-        Some((loss, error)) => println!("error: {error} loss: {loss}"),
+        Some((loss, error)) => println!("epoch error: {error} loss: {loss}"),
         None => println!("Something went wrong during training"),
+    }
+
+    match trainer.train_epoch(0, &train_batches, &train_cat_label_batches) {
+        Some((loss, error)) => println!("epoch error: {error} loss: {loss}"),
+        None => println!("Something went wrong during epoch training"),
     }
 }
