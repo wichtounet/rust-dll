@@ -1,6 +1,7 @@
 use etl::batch_outer_expr::batch_outer;
 use etl::bias_add_expr::bias_add;
 use etl::bias_batch_sum_expr::bias_batch_sum;
+use etl::constant::cst;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
 use etl::sigmoid_derivative_expr::sigmoid_derivative;
@@ -45,23 +46,33 @@ pub struct DenseLayer {
 
 impl DenseLayer {
     pub fn new(input_size: usize, output_size: usize) -> Self {
-        Self {
+        let mut s = Self {
             input_size,
             output_size,
             weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
             biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
             activation: Activation::Sigmoid,
-        }
+        };
+
+        // Yann Lecun's recommendation for weights initialization
+        s.weights /= cst((input_size as f32).sqrt());
+
+        s
     }
 
     pub fn new_softmax(input_size: usize, output_size: usize) -> Self {
-        Self {
+        let mut s = Self {
             input_size,
             output_size,
             weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
             biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
             activation: Activation::Softmax,
-        }
+        };
+
+        // Yann Lecun's recommendation for weights initialization
+        s.weights /= cst((input_size as f32).sqrt());
+
+        s
     }
 }
 

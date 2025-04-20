@@ -33,7 +33,7 @@ impl<'a> Sgd<'a> {
             w_gradients: Vec::new(),
             b_gradients: Vec::new(),
             batch_size,
-            learning_rate: 0.09,
+            learning_rate: 0.1,
         };
 
         let layers = trainer.network.layers();
