@@ -1,4 +1,5 @@
 use etl::batch_outer_expr::batch_outer;
+use etl::batch_stable_softmax_expr::batch_stable_softmax;
 use etl::bias_add_expr::bias_add;
 use etl::bias_batch_sum_expr::bias_batch_sum;
 use etl::constant::cst;
@@ -89,7 +90,7 @@ impl Layer for DenseLayer {
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
         } else {
-            *output |= stable_softmax(bias_add(input * &self.weights, &self.biases));
+            *output |= batch_stable_softmax(bias_add(input * &self.weights, &self.biases));
         }
     }
 
