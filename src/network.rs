@@ -6,7 +6,7 @@ use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
 use etl::sigmoid_derivative_expr::sigmoid_derivative;
 use etl::sigmoid_expr::sigmoid;
-use etl::softmax_expr::softmax;
+use etl::stable_softmax_expr::stable_softmax;
 use etl::transpose_expr::transpose;
 use etl::vector::Vector;
 
@@ -81,7 +81,7 @@ impl Layer for DenseLayer {
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(input * &self.weights + &self.biases);
         } else {
-            *output |= softmax(input * &self.weights + &self.biases);
+            *output |= stable_softmax(input * &self.weights + &self.biases);
         }
     }
 
@@ -89,7 +89,7 @@ impl Layer for DenseLayer {
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
         } else {
-            *output |= softmax(bias_add(input * &self.weights, &self.biases));
+            *output |= stable_softmax(bias_add(input * &self.weights, &self.biases));
         }
     }
 
