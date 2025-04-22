@@ -186,7 +186,7 @@ impl<'a> Sgd<'a> {
     }
 
     fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
-        for epoch in 1..epochs + 1 {
+        for epoch in 1..epochs {
             let (loss, error) = self.train_epoch(epoch, input_batches, label_batches)?;
             println!("epoch {epoch}/{epochs} error: {error} loss: {loss}");
         }
