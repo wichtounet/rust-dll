@@ -200,8 +200,6 @@ impl<'a> Sgd<'a> {
 fn main() {
     let batch_size = 100;
 
-    println!("Hello, world!");
-
     let mut train_images = read_mnist_images_1d(true);
     let mut test_images = read_mnist_images_1d(false);
 
@@ -245,8 +243,8 @@ fn main() {
     println!("Test label 0: {}", test_cat_labels.first().expect("No labels"));
 
     let mut mlp = Network::new();
-    mlp.add_layer(Box::new(DenseLayer::new(28 * 28, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new(500, 250)));
+    mlp.add_layer(Box::new(DenseLayer::new_sigmoid(28 * 28, 250)));
+    //mlp.add_layer(Box::new(DenseLayer::new_sigmoid(500, 250)));
     mlp.add_layer(Box::new(DenseLayer::new_softmax(250, 10)));
 
     let mut output = mlp.new_output();
@@ -258,5 +256,5 @@ fn main() {
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 
     let mut trainer = Sgd::new(&mut mlp, batch_size);
-    trainer.train(50, &train_batches, &train_cat_label_batches);
+    trainer.train(10, &train_batches, &train_cat_label_batches);
 }

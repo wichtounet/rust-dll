@@ -113,7 +113,7 @@ impl Layer for DenseLayer {
             *errors >>= relu_derivative(output);
         }
 
-        // THe derivative of softmax is 1.0
+        // The derivative of softmax is 1.0
     }
 
     fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>) {
