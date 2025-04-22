@@ -173,22 +173,27 @@ impl<'a> Sgd<'a> {
 
     fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
         let batches = input_batches.len();
+        let last_batch = batches - 1;
 
         for i in 0..batches - 1 {
             let (loss, error) = self.train_batch(epoch, &input_batches[i], &label_batches[i])?;
             println!("epoch {epoch} batch {i}/{batches} error: {error} loss: {loss}");
         }
 
-        self.train_batch(epoch, &input_batches[batches - 1], &label_batches[batches - 1])
+        let (loss, error) = self.train_batch(epoch, &input_batches[last_batch], &label_batches[last_batch])?;
+        println!("epoch {epoch} batch {last_batch}/{batches} error: {error} loss: {loss}");
+        Some((loss, error))
     }
 
     fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
-        for epoch in 0..epochs - 1 {
+        for epoch in 1..epochs + 1 {
             let (loss, error) = self.train_epoch(epoch, input_batches, label_batches)?;
             println!("epoch {epoch}/{epochs} error: {error} loss: {loss}");
         }
 
-        self.train_epoch(epochs - 1, input_batches, label_batches)
+        let (loss, error) = self.train_epoch(epochs, input_batches, label_batches)?;
+        println!("epoch {epochs}/{epochs} error: {error} loss: {loss}");
+        Some((loss, error))
     }
 }
 
