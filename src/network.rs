@@ -5,6 +5,8 @@ use etl::bias_batch_sum_expr::bias_batch_sum;
 use etl::constant::cst;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
+use etl::relu_derivative_expr::relu_derivative;
+use etl::relu_expr::relu;
 use etl::sigmoid_derivative_expr::sigmoid_derivative;
 use etl::sigmoid_expr::sigmoid;
 use etl::stable_softmax_expr::stable_softmax;
@@ -15,6 +17,7 @@ use etl::vector::Vector;
 pub enum Activation {
     Sigmoid,
     Softmax,
+    ReLU,
 }
 
 pub trait Layer {
@@ -61,6 +64,21 @@ impl DenseLayer {
         s
     }
 
+    pub fn new_relu(input_size: usize, output_size: usize) -> Self {
+        let mut s = Self {
+            input_size,
+            output_size,
+            weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
+            biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
+            activation: Activation::ReLU,
+        };
+
+        // Yann Lecun's recommendation for weights initialization
+        s.weights /= cst((input_size as f32).sqrt());
+
+        s
+    }
+
     pub fn new_softmax(input_size: usize, output_size: usize) -> Self {
         let mut s = Self {
             input_size,
@@ -81,6 +99,8 @@ impl Layer for DenseLayer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(input * &self.weights + &self.biases);
+        } else if self.activation == Activation::ReLU {
+            *output |= relu(input * &self.weights + &self.biases);
         } else {
             *output |= stable_softmax(input * &self.weights + &self.biases);
         }
@@ -89,6 +109,8 @@ impl Layer for DenseLayer {
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
+        } else if self.activation == Activation::ReLU {
+            *output |= relu(bias_add(input * &self.weights, &self.biases));
         } else {
             *output |= batch_stable_softmax(bias_add(input * &self.weights, &self.biases));
         }
@@ -105,6 +127,8 @@ impl Layer for DenseLayer {
     fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>) {
         if self.activation == Activation::Sigmoid {
             *errors >>= sigmoid_derivative(output);
+        } else if self.activation == Activation::ReLU {
+            *errors >>= relu_derivative(output);
         }
 
         // THe derivative of softmax is 1.0
