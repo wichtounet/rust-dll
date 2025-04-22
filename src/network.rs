@@ -49,49 +49,31 @@ pub struct DenseLayer {
 }
 
 impl DenseLayer {
-    pub fn new(input_size: usize, output_size: usize) -> Self {
+    pub fn new(input_size: usize, output_size: usize, activation: Activation) -> Self {
         let mut s = Self {
             input_size,
             output_size,
             weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
             biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
-            activation: Activation::Sigmoid,
+            activation,
         };
 
         // Yann Lecun's recommendation for weights initialization
         s.weights /= cst((input_size as f32).sqrt());
 
         s
+    }
+
+    pub fn new_sigmoid(input_size: usize, output_size: usize) -> Self {
+        Self::new(input_size, output_size, Activation::Sigmoid)
     }
 
     pub fn new_relu(input_size: usize, output_size: usize) -> Self {
-        let mut s = Self {
-            input_size,
-            output_size,
-            weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
-            biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
-            activation: Activation::ReLU,
-        };
-
-        // Yann Lecun's recommendation for weights initialization
-        s.weights /= cst((input_size as f32).sqrt());
-
-        s
+        Self::new(input_size, output_size, Activation::ReLU)
     }
 
     pub fn new_softmax(input_size: usize, output_size: usize) -> Self {
-        let mut s = Self {
-            input_size,
-            output_size,
-            weights: Matrix2d::<f32>::new_rand_normal(input_size, output_size), // A normal distribution is a decent initialization for weights
-            biases: Vector::<f32>::new(output_size),                            // 0 is a good initialization for biases
-            activation: Activation::Softmax,
-        };
-
-        // Yann Lecun's recommendation for weights initialization
-        s.weights /= cst((input_size as f32).sqrt());
-
-        s
+        Self::new(input_size, output_size, Activation::Softmax)
     }
 }
 
