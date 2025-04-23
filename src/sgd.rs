@@ -52,6 +52,57 @@ impl<'a> Sgd<'a> {
         trainer
     }
 
+    fn compute_metrics_batch(&mut self, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
+        let layers = self.network.layers();
+        let last_layer = layers - 1;
+
+        // Forward propagation of the batch
+
+        for layer in 0..layers {
+            let mut output = self.outputs[layer].take()?;
+
+            if layer == 0 {
+                self.network.get_layer(layer).forward_batch(input_batch, &mut output);
+            } else {
+                let input = self.outputs[layer - 1].take()?;
+                self.network.get_layer(layer).forward_batch(&input, &mut output);
+                self.outputs[layer - 1] = Some(input);
+            }
+
+            self.outputs[layer] = Some(output);
+        }
+
+        // Compute CCE error and loss
+
+        let last_output = self.outputs[last_layer].take()?;
+
+        let alpha: f32 = -1.0 / (self.batch_size as f32);
+        let loss: f32 = alpha * sum(&(log(&last_output) >> label_batch));
+
+        let beta: f32 = 1.0 / (self.batch_size as f32);
+        let error: f32 = beta * sum(&(binary_min(abs(argmax(label_batch) - argmax(&last_output)), cst(1.0))));
+
+        self.outputs[last_layer] = Some(last_output);
+
+        Some((loss, error))
+    }
+
+    fn compute_metrics_dataset(&mut self, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+        let batches = input_batches.len();
+
+        let mut global_loss: f32 = 0.0;
+        let mut global_error: f32 = 0.0;
+
+        for batch in 0..batches {
+            let (loss, error) = self.compute_metrics_batch(&input_batches[batch], &label_batches[batch])?;
+
+            global_loss += loss;
+            global_error += error;
+        }
+
+        Some((global_loss / batches as f32, global_error / batches as f32))
+    }
+
     fn train_batch(&mut self, _epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
         let layers = self.network.layers();
         let last_layer = layers - 1;
@@ -153,17 +204,7 @@ impl<'a> Sgd<'a> {
 
         // Compute the category cross entropy loss and error
 
-        let last_output = self.outputs[last_layer].take()?;
-
-        let alpha: f32 = -1.0 / (self.batch_size as f32);
-        let loss: f32 = alpha * sum(&(log(&last_output) >> label_batch));
-
-        let beta: f32 = 1.0 / (self.batch_size as f32);
-        let error: f32 = beta * sum(&(binary_min(abs(argmax(label_batch) - argmax(&last_output)), cst(1.0))));
-
-        self.outputs[last_layer] = Some(last_output);
-
-        Some((loss, error))
+        self.compute_metrics_batch(input_batch, label_batch)
     }
 
     fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
@@ -182,14 +223,17 @@ impl<'a> Sgd<'a> {
 
     pub fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
         for epoch in 1..epochs {
-            let (loss, error) = self.train_epoch(epoch, input_batches, label_batches)?;
-            // TODO Compute the loss/error on whole dataset
+            self.train_epoch(epoch, input_batches, label_batches)?;
+
+            let (loss, error) = self.compute_metrics_dataset(input_batches, label_batches)?;
             println!("epoch {epoch}/{epochs} error: {error} loss: {loss}");
         }
 
-        let (loss, error) = self.train_epoch(epochs, input_batches, label_batches)?;
+        self.train_epoch(epochs, input_batches, label_batches)?;
+
+        let (loss, error) = self.compute_metrics_dataset(input_batches, label_batches)?;
         println!("epoch {epochs}/{epochs} error: {error} loss: {loss}");
-        // TODO Compute the loss/error on whole dataset
+
         Some((loss, error))
     }
 }
