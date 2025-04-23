@@ -137,6 +137,10 @@ impl<'a> Sgd<'a> {
 
             self.outputs[last_layer] = Some(last_output);
             self.errors[last_layer] = Some(last_errors);
+
+            // With categorical cross entropy, there is no need to multiply by the derivative of
+            // the activation function since the terms are canceling out in the derivative of the
+            // loss
         }
 
         // Backward propagation of the errors
