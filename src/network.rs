@@ -140,11 +140,11 @@ impl Layer for DenseLayer {
     }
 
     fn compute_w_gradients(&self, gradients: &mut Matrix2d<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>) {
-        *gradients |= batch_outer(input, errors)
+        *gradients |= batch_outer(input, errors);
     }
 
     fn compute_b_gradients(&self, gradients: &mut Vector<f32>, _input: &Matrix2d<f32>, errors: &Matrix2d<f32>) {
-        *gradients |= bias_batch_sum(errors)
+        *gradients |= bias_batch_sum(errors);
     }
 
     fn apply_w_gradients(&mut self, gradients: &Matrix2d<f32>) {
