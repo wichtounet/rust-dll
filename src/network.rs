@@ -1,4 +1,5 @@
 use etl::batch_outer_expr::batch_outer;
+use etl::batch_softmax_expr::batch_softmax;
 use etl::batch_stable_softmax_expr::batch_stable_softmax;
 use etl::bias_add_expr::bias_add;
 use etl::bias_batch_sum_expr::bias_batch_sum;
@@ -9,6 +10,7 @@ use etl::relu_derivative_expr::relu_derivative;
 use etl::relu_expr::relu;
 use etl::sigmoid_derivative_expr::sigmoid_derivative;
 use etl::sigmoid_expr::sigmoid;
+use etl::softmax_expr::softmax;
 use etl::stable_softmax_expr::stable_softmax;
 use etl::transpose_expr::transpose;
 use etl::vector::Vector;
@@ -17,6 +19,7 @@ use etl::vector::Vector;
 pub enum Activation {
     Sigmoid,
     Softmax,
+    StableSoftmax,
     ReLU,
 }
 
@@ -75,6 +78,10 @@ impl DenseLayer {
     pub fn new_softmax(input_size: usize, output_size: usize) -> Self {
         Self::new(input_size, output_size, Activation::Softmax)
     }
+
+    pub fn new_stable_softmax(input_size: usize, output_size: usize) -> Self {
+        Self::new(input_size, output_size, Activation::StableSoftmax)
+    }
 }
 
 impl Layer for DenseLayer {
@@ -83,8 +90,10 @@ impl Layer for DenseLayer {
             *output |= sigmoid(input * &self.weights + &self.biases);
         } else if self.activation == Activation::ReLU {
             *output |= relu(input * &self.weights + &self.biases);
-        } else {
+        } else if self.activation == Activation::StableSoftmax {
             *output |= stable_softmax(input * &self.weights + &self.biases);
+        } else {
+            *output |= softmax(input * &self.weights + &self.biases);
         }
     }
 
@@ -93,8 +102,10 @@ impl Layer for DenseLayer {
             *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
         } else if self.activation == Activation::ReLU {
             *output |= relu(bias_add(input * &self.weights, &self.biases));
-        } else {
+        } else if self.activation == Activation::StableSoftmax {
             *output |= batch_stable_softmax(bias_add(input * &self.weights, &self.biases));
+        } else {
+            *output |= batch_softmax(bias_add(input * &self.weights, &self.biases));
         }
     }
 
