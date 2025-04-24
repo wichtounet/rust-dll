@@ -17,10 +17,11 @@ pub struct Sgd<'a> {
     b_gradients: Vec<Option<Vector<f32>>>,
     batch_size: usize,
     learning_rate: f32,
+    verbose: bool,
 }
 
 impl<'a> Sgd<'a> {
-    pub fn new(network: &'a mut Network, batch_size: usize) -> Self {
+    pub fn new(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
         let mut trainer = Self {
             network,
             outputs: Vec::new(),
@@ -29,6 +30,7 @@ impl<'a> Sgd<'a> {
             b_gradients: Vec::new(),
             batch_size,
             learning_rate: 0.1,
+            verbose,
         };
 
         let layers = trainer.network.layers();
@@ -217,11 +219,15 @@ impl<'a> Sgd<'a> {
 
         for i in 0..batches - 1 {
             let (loss, error) = self.train_batch(epoch, &input_batches[i], &label_batches[i])?;
-            println!("epoch {epoch} batch {i}/{batches} error: {error} loss: {loss}");
+            if self.verbose {
+                println!("epoch {epoch} batch {i}/{batches} error: {error} loss: {loss}");
+            }
         }
 
         let (loss, error) = self.train_batch(epoch, &input_batches[last_batch], &label_batches[last_batch])?;
-        println!("epoch {epoch} batch {last_batch}/{batches} error: {error} loss: {loss}");
+        if self.verbose {
+            println!("epoch {epoch} batch {last_batch}/{batches} error: {error} loss: {loss}");
+        }
         Some((loss, error))
     }
 

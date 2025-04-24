@@ -66,6 +66,6 @@ fn main() {
 
     mlp.forward_batch(train_batches.first().expect("No train batch"), &mut batch_output);
 
-    let mut trainer = Sgd::new(&mut mlp, batch_size);
+    let mut trainer = Sgd::new(&mut mlp, batch_size, false);
     trainer.train(10, &train_batches, &train_cat_label_batches);
 }
