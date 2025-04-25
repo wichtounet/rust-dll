@@ -54,7 +54,7 @@ impl<'a> Sgd<'a> {
         trainer
     }
 
-    fn compute_metrics_batch(&mut self, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
+    fn compute_metrics_batch(&mut self, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>, normalize: bool) -> Option<(f32, f32)> {
         let layers = self.network.layers();
         let last_layer = layers - 1;
 
@@ -78,10 +78,10 @@ impl<'a> Sgd<'a> {
 
         let last_output = self.outputs[last_layer].take()?;
 
-        let alpha: f32 = -1.0 / (self.batch_size as f32);
+        let alpha: f32 = if normalize { -1.0 / (self.batch_size as f32) } else { -1.0 };
         let loss: f32 = alpha * sum(&(log(&last_output) >> label_batch));
 
-        let beta: f32 = 1.0 / (self.batch_size as f32);
+        let beta: f32 = if normalize { 1.0 / (self.batch_size as f32) } else { 1.0 };
         let error: f32 = beta * sum(&(binary_min(abs(argmax(label_batch) - argmax(&last_output)), cst(1.0))));
 
         self.outputs[last_layer] = Some(last_output);
@@ -96,13 +96,13 @@ impl<'a> Sgd<'a> {
         let mut global_error: f32 = 0.0;
 
         for batch in 0..batches {
-            let (loss, error) = self.compute_metrics_batch(&input_batches[batch], &label_batches[batch])?;
+            let (loss, error) = self.compute_metrics_batch(&input_batches[batch], &label_batches[batch], false)?;
 
             global_loss += loss;
             global_error += error;
         }
 
-        Some((global_loss / batches as f32, global_error / batches as f32))
+        Some((global_loss / (batches * self.batch_size) as f32, global_error / ((batches * self.batch_size) as f32)))
     }
 
     fn train_batch(&mut self, _epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
@@ -210,7 +210,7 @@ impl<'a> Sgd<'a> {
 
         // Compute the category cross entropy loss and error
 
-        self.compute_metrics_batch(input_batch, label_batch)
+        self.compute_metrics_batch(input_batch, label_batch, true)
     }
 
     fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
