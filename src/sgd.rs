@@ -10,27 +10,49 @@ use std::time::{Duration, Instant};
 
 use crate::network::Network;
 
+#[derive(PartialEq)]
+pub enum TrainMethod {
+    Sgd,
+    Momentum,
+}
+
 pub struct Sgd<'a> {
     network: &'a mut Network,
     outputs: Vec<Option<Matrix2d<f32>>>,
     errors: Vec<Option<Matrix2d<f32>>>,
     w_gradients: Vec<Option<Matrix2d<f32>>>,
     b_gradients: Vec<Option<Vector<f32>>>,
+    w_inc: Vec<Option<Matrix2d<f32>>>,
+    b_inc: Vec<Option<Vector<f32>>>,
     batch_size: usize,
+    method: TrainMethod,
     learning_rate: f32,
+    momentum: f32,
     verbose: bool,
 }
 
 impl<'a> Sgd<'a> {
-    pub fn new(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
+    pub fn new_sgd(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
+        Self::new(network, batch_size, verbose, TrainMethod::Sgd)
+    }
+
+    pub fn new_momentum(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
+        Self::new(network, batch_size, verbose, TrainMethod::Momentum)
+    }
+
+    pub fn new(network: &'a mut Network, batch_size: usize, verbose: bool, method: TrainMethod) -> Self {
         let mut trainer = Self {
             network,
             outputs: Vec::new(),
             errors: Vec::new(),
             w_gradients: Vec::new(),
             b_gradients: Vec::new(),
+            w_inc: Vec::new(),
+            b_inc: Vec::new(),
             batch_size,
+            method,
             learning_rate: 0.1,
+            momentum: 0.9,
             verbose,
         };
 
@@ -50,6 +72,11 @@ impl<'a> Sgd<'a> {
         for layer in 0..layers {
             trainer.w_gradients.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
             trainer.b_gradients.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+
+            if trainer.method == TrainMethod::Momentum {
+                trainer.w_inc.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
+                trainer.b_inc.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+            }
         }
 
         trainer
@@ -199,11 +226,33 @@ impl<'a> Sgd<'a> {
             let mut w_gradients = self.w_gradients[layer].take()?;
             let mut b_gradients = self.b_gradients[layer].take()?;
 
-            w_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
-            b_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
+            if self.method == TrainMethod::Sgd {
+                w_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
+                b_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
 
-            self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
-            self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
+                self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
+                self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
+            } else if self.method == TrainMethod::Momentum {
+                let mut w_inc = self.w_inc[layer].take()?;
+                let mut b_inc = self.b_inc[layer].take()?;
+
+                // Since Rust is pretty limited by its borrow-checker, we cannot really combine
+                // proper expressions with mut and non-mut `c`, so we must split the true operation
+                // in two compound operation
+                // This will have a significant performance cost
+
+                w_inc >>= cst(self.momentum);
+                b_inc >>= cst(self.momentum);
+
+                w_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &w_gradients;
+                b_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &b_gradients;
+
+                self.network.get_layer_mut(layer).apply_w_gradients(&w_inc);
+                self.network.get_layer_mut(layer).apply_b_gradients(&b_inc);
+
+                self.b_inc[layer] = Some(b_inc);
+                self.w_inc[layer] = Some(w_inc);
+            }
 
             self.b_gradients[layer] = Some(b_gradients);
             self.w_gradients[layer] = Some(w_gradients);
