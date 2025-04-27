@@ -6,6 +6,7 @@ use etl::matrix_2d::Matrix2d;
 use etl::min_expr::binary_min;
 use etl::reductions::sum;
 use etl::vector::Vector;
+use std::time::{Duration, Instant};
 
 use crate::network::Network;
 
@@ -213,7 +214,9 @@ impl<'a> Sgd<'a> {
         self.compute_metrics_batch(input_batch, label_batch, true)
     }
 
-    fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+    fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32, u128)> {
+        let start = Instant::now();
+
         let batches = input_batches.len();
         let last_batch = batches - 1;
 
@@ -228,21 +231,24 @@ impl<'a> Sgd<'a> {
         if self.verbose {
             println!("epoch {epoch} batch {last_batch}/{batches} error: {error} loss: {loss}");
         }
-        Some((loss, error))
+
+        let duration = start.elapsed();
+
+        Some((loss, error, duration.as_millis()))
     }
 
     pub fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
         for epoch in 1..epochs {
-            self.train_epoch(epoch, input_batches, label_batches)?;
+            let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epoch, input_batches, label_batches)?;
 
             let (loss, error) = self.compute_metrics_dataset(input_batches, label_batches)?;
-            println!("epoch {epoch}/{epochs} error: {error} loss: {loss}");
+            println!("epoch {epoch}/{epochs} error: {error} loss: {loss} time: {millis}ms");
         }
 
-        self.train_epoch(epochs, input_batches, label_batches)?;
+        let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epochs, input_batches, label_batches)?;
 
         let (loss, error) = self.compute_metrics_dataset(input_batches, label_batches)?;
-        println!("epoch {epochs}/{epochs} error: {error} loss: {loss}");
+        println!("epoch {epochs}/{epochs} error: {error} loss: {loss} time: {millis}ms");
 
         Some((loss, error))
     }
