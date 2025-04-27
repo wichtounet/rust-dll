@@ -6,11 +6,9 @@ use etl::matrix_2d::Matrix2d;
 use etl::min_expr::binary_min;
 use etl::reductions::sum;
 use etl::vector::Vector;
-use lazy_static::lazy_static;
-use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::Instant;
 
+use crate::counters::*;
 use crate::network::Network;
 
 #[derive(PartialEq)]
@@ -32,46 +30,6 @@ pub struct Sgd<'a> {
     learning_rate: f32,
     momentum: f32,
     verbose: bool,
-}
-
-lazy_static! {
-    static ref COUNTERS: Mutex<HashMap<&'static str, u128>> = {
-        let counters = HashMap::<&'static str, u128>::new();
-        Mutex::new(counters)
-    };
-}
-
-pub struct Counter {
-    name: &'static str,
-    start: Instant,
-}
-
-impl Counter {
-    pub fn new(name: &'static str) -> Self {
-        Self { name, start: Instant::now() }
-    }
-}
-
-impl Drop for Counter {
-    fn drop(&mut self) {
-        let duration = self.start.elapsed().as_micros();
-        let mut counters = COUNTERS.lock().unwrap();
-
-        if let Some(value) = counters.get_mut(&self.name) {
-            *value += duration;
-        } else {
-            counters.insert(self.name, duration);
-        }
-    }
-}
-
-pub fn dump_counters() {
-    // TODO Sort the counters by duration
-    let counters = COUNTERS.lock().unwrap();
-    for (name, micros) in counters.iter() {
-        let duration = micros / 1000;
-        println!("{name}: {duration}ms")
-    }
 }
 
 impl<'a> Sgd<'a> {

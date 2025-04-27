@@ -1,8 +1,9 @@
+use counters::dump_counters;
 use network::DenseLayer;
 use network::Network;
-use sgd::dump_counters;
 use sgd::Sgd;
 
+mod counters;
 mod mnist;
 mod network;
 mod sgd;
@@ -55,9 +56,9 @@ fn main() {
     println!("Test label 0: {}", test_cat_labels.first().expect("No labels"));
 
     let mut mlp = Network::new();
-    mlp.add_layer(Box::new(DenseLayer::new_sigmoid(28 * 28, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new_sigmoid(500, 500)));
-    mlp.add_layer(Box::new(DenseLayer::new_stable_softmax(500, 10)));
+    mlp.add_layer(Box::new(DenseLayer::new_sigmoid(28 * 28, 200)));
+    //mlp.add_layer(Box::new(DenseLayer::new_sigmoid(500, 500)));
+    mlp.add_layer(Box::new(DenseLayer::new_stable_softmax(200, 10)));
 
     let mut output = mlp.new_output();
 

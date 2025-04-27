@@ -15,6 +15,8 @@ use etl::stable_softmax_expr::stable_softmax;
 use etl::transpose_expr::transpose;
 use etl::vector::Vector;
 
+use crate::counters::*;
+
 #[derive(PartialEq)]
 pub enum Activation {
     Sigmoid,
@@ -98,6 +100,8 @@ impl Layer for DenseLayer {
     }
 
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        let _counter = Counter::new("dense:forward");
+
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
         } else if self.activation == Activation::ReLU {
@@ -118,6 +122,8 @@ impl Layer for DenseLayer {
     }
 
     fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>) {
+        let _counter = Counter::new("dense:adapt");
+
         if self.activation == Activation::Sigmoid {
             *errors >>= sigmoid_derivative(output);
         } else if self.activation == Activation::ReLU {
@@ -128,6 +134,8 @@ impl Layer for DenseLayer {
     }
 
     fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>) {
+        let _counter = Counter::new("dense:backward");
+
         *output |= errors * transpose(&self.weights);
     }
 
@@ -140,18 +148,26 @@ impl Layer for DenseLayer {
     }
 
     fn compute_w_gradients(&self, gradients: &mut Matrix2d<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>) {
+        let _counter = Counter::new("dense:compute_w");
+
         *gradients |= batch_outer(input, errors);
     }
 
     fn compute_b_gradients(&self, gradients: &mut Vector<f32>, _input: &Matrix2d<f32>, errors: &Matrix2d<f32>) {
+        let _counter = Counter::new("dense:compute_b");
+
         *gradients |= bias_batch_sum(errors);
     }
 
     fn apply_w_gradients(&mut self, gradients: &Matrix2d<f32>) {
+        let _counter = Counter::new("dense:apply_w");
+
         self.weights += gradients;
     }
 
     fn apply_b_gradients(&mut self, gradients: &Vector<f32>) {
+        let _counter = Counter::new("dense:apply_b");
+
         self.biases += gradients;
     }
 }
