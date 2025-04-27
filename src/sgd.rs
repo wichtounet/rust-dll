@@ -6,7 +6,10 @@ use etl::matrix_2d::Matrix2d;
 use etl::min_expr::binary_min;
 use etl::reductions::sum;
 use etl::vector::Vector;
-use std::time::{Duration, Instant};
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Instant;
 
 use crate::network::Network;
 
@@ -29,6 +32,46 @@ pub struct Sgd<'a> {
     learning_rate: f32,
     momentum: f32,
     verbose: bool,
+}
+
+lazy_static! {
+    static ref COUNTERS: Mutex<HashMap<&'static str, u128>> = {
+        let counters = HashMap::<&'static str, u128>::new();
+        Mutex::new(counters)
+    };
+}
+
+pub struct Counter {
+    name: &'static str,
+    start: Instant,
+}
+
+impl Counter {
+    pub fn new(name: &'static str) -> Self {
+        Self { name, start: Instant::now() }
+    }
+}
+
+impl Drop for Counter {
+    fn drop(&mut self) {
+        let duration = self.start.elapsed().as_micros();
+        let mut counters = COUNTERS.lock().unwrap();
+
+        if let Some(value) = counters.get_mut(&self.name) {
+            *value += duration;
+        } else {
+            counters.insert(self.name, duration);
+        }
+    }
+}
+
+pub fn dump_counters() {
+    // TODO Sort the counters by duration
+    let counters = COUNTERS.lock().unwrap();
+    for (name, micros) in counters.iter() {
+        let duration = micros / 1000;
+        println!("{name}: {duration}ms")
+    }
 }
 
 impl<'a> Sgd<'a> {
@@ -83,6 +126,8 @@ impl<'a> Sgd<'a> {
     }
 
     fn compute_metrics_batch(&mut self, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>, normalize: bool) -> Option<(f32, f32)> {
+        let _counter = Counter::new("compute_metrics");
+
         let layers = self.network.layers();
         let last_layer = layers - 1;
 
@@ -143,23 +188,29 @@ impl<'a> Sgd<'a> {
         // Since we can't borrow two elements of the same vector immutably and mutably at the same
         // time, we must take ownership of them when we need them and then put them back
 
-        for layer in 0..layers {
-            let mut output = self.outputs[layer].take()?;
+        {
+            let _counter = Counter::new("sgd: forward");
 
-            if layer == 0 {
-                self.network.get_layer(layer).forward_batch(input_batch, &mut output);
-            } else {
-                let input = self.outputs[layer - 1].take()?;
-                self.network.get_layer(layer).forward_batch(&input, &mut output);
-                self.outputs[layer - 1] = Some(input);
+            for layer in 0..layers {
+                let mut output = self.outputs[layer].take()?;
+
+                if layer == 0 {
+                    self.network.get_layer(layer).forward_batch(input_batch, &mut output);
+                } else {
+                    let input = self.outputs[layer - 1].take()?;
+                    self.network.get_layer(layer).forward_batch(&input, &mut output);
+                    self.outputs[layer - 1] = Some(input);
+                }
+
+                self.outputs[layer] = Some(output);
             }
-
-            self.outputs[layer] = Some(output);
         }
 
         // Compute the errors of the last layer with categorical cross entropy loss
 
         {
+            let _counter = Counter::new("sgd: errors");
+
             let mut last_errors = self.errors[last_layer].take()?;
             let last_output = self.outputs[last_layer].take()?;
 
@@ -175,92 +226,106 @@ impl<'a> Sgd<'a> {
 
         // Backward propagation of the errors
 
-        for layer in (0..layers).rev() {
-            let mut errors = self.errors[layer].take()?;
-            let outputs = self.outputs[layer].take()?;
+        {
+            let _counter = Counter::new("sgd: backward");
 
-            // All layers but the last need to adapt errors for the derivative
-            if layer != last_layer {
-                self.network.get_layer(layer).adapt_errors(&outputs, &mut errors);
+            for layer in (0..layers).rev() {
+                let mut errors = self.errors[layer].take()?;
+                let outputs = self.outputs[layer].take()?;
+
+                // All layers but the last need to adapt errors for the derivative
+                if layer != last_layer {
+                    self.network.get_layer(layer).adapt_errors(&outputs, &mut errors);
+                }
+
+                // All layers but the first need back propagation
+                if layer > 0 {
+                    let mut back_errors = self.errors[layer - 1].take()?;
+                    self.network.get_layer(layer).backward_batch(&mut back_errors, &errors);
+                    self.errors[layer - 1] = Some(back_errors);
+                }
+
+                self.outputs[layer] = Some(outputs);
+                self.errors[layer] = Some(errors);
             }
-
-            // All layers but the first need back propagation
-            if layer > 0 {
-                let mut back_errors = self.errors[layer - 1].take()?;
-                self.network.get_layer(layer).backward_batch(&mut back_errors, &errors);
-                self.errors[layer - 1] = Some(back_errors);
-            }
-
-            self.outputs[layer] = Some(outputs);
-            self.errors[layer] = Some(errors);
         }
 
         // Compute the gradients
 
-        for layer in 0..layers {
-            let mut w_gradients = self.w_gradients[layer].take()?;
-            let mut b_gradients = self.b_gradients[layer].take()?;
-            let errors = self.errors[layer].take()?;
+        {
+            let _counter = Counter::new("sgd: compute_gradients");
 
-            if layer == 0 {
-                self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, input_batch, &errors);
-                self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, input_batch, &errors);
-            } else {
-                let input = self.outputs[layer - 1].take()?;
+            for layer in 0..layers {
+                let mut w_gradients = self.w_gradients[layer].take()?;
+                let mut b_gradients = self.b_gradients[layer].take()?;
+                let errors = self.errors[layer].take()?;
 
-                self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, &input, &errors);
-                self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, &input, &errors);
+                if layer == 0 {
+                    self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, input_batch, &errors);
+                    self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, input_batch, &errors);
+                } else {
+                    let input = self.outputs[layer - 1].take()?;
 
-                self.outputs[layer - 1] = Some(input);
+                    self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, &input, &errors);
+                    self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, &input, &errors);
+
+                    self.outputs[layer - 1] = Some(input);
+                }
+
+                self.errors[layer] = Some(errors);
+                self.b_gradients[layer] = Some(b_gradients);
+                self.w_gradients[layer] = Some(w_gradients);
             }
-
-            self.errors[layer] = Some(errors);
-            self.b_gradients[layer] = Some(b_gradients);
-            self.w_gradients[layer] = Some(w_gradients);
         }
 
         // Here we could apply gradients decay
 
         // Apply the gradients
-        for layer in 0..layers {
-            let mut w_gradients = self.w_gradients[layer].take()?;
-            let mut b_gradients = self.b_gradients[layer].take()?;
+        {
+            let _counter = Counter::new("sgd: apply_gradients");
 
-            if self.method == TrainMethod::Sgd {
-                w_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
-                b_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
+            for layer in 0..layers {
+                let mut w_gradients = self.w_gradients[layer].take()?;
+                let mut b_gradients = self.b_gradients[layer].take()?;
 
-                self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
-                self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
-            } else if self.method == TrainMethod::Momentum {
-                let mut w_inc = self.w_inc[layer].take()?;
-                let mut b_inc = self.b_inc[layer].take()?;
+                if self.method == TrainMethod::Sgd {
+                    w_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
+                    b_gradients >>= cst(self.learning_rate / (self.batch_size as f32));
 
-                // Since Rust is pretty limited by its borrow-checker, we cannot really combine
-                // proper expressions with mut and non-mut `c`, so we must split the true operation
-                // in two compound operation
-                // This will have a significant performance cost
+                    self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
+                    self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
+                } else if self.method == TrainMethod::Momentum {
+                    let mut w_inc = self.w_inc[layer].take()?;
+                    let mut b_inc = self.b_inc[layer].take()?;
 
-                w_inc >>= cst(self.momentum);
-                b_inc >>= cst(self.momentum);
+                    // Since Rust is pretty limited by its borrow-checker, we cannot really combine
+                    // proper expressions with mut and non-mut `c`, so we must split the true operation
+                    // in two compound operation
+                    // This will have a significant performance cost
 
-                w_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &w_gradients;
-                b_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &b_gradients;
+                    w_inc >>= cst(self.momentum);
+                    b_inc >>= cst(self.momentum);
 
-                self.network.get_layer_mut(layer).apply_w_gradients(&w_inc);
-                self.network.get_layer_mut(layer).apply_b_gradients(&b_inc);
+                    w_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &w_gradients;
+                    b_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &b_gradients;
 
-                self.b_inc[layer] = Some(b_inc);
-                self.w_inc[layer] = Some(w_inc);
+                    self.network.get_layer_mut(layer).apply_w_gradients(&w_inc);
+                    self.network.get_layer_mut(layer).apply_b_gradients(&b_inc);
+
+                    self.b_inc[layer] = Some(b_inc);
+                    self.w_inc[layer] = Some(w_inc);
+                }
+
+                self.b_gradients[layer] = Some(b_gradients);
+                self.w_gradients[layer] = Some(w_gradients);
             }
-
-            self.b_gradients[layer] = Some(b_gradients);
-            self.w_gradients[layer] = Some(w_gradients);
         }
 
         // Compute the category cross entropy loss and error
 
-        self.compute_metrics_batch(input_batch, label_batch, true)
+        {
+            self.compute_metrics_batch(input_batch, label_batch, true)
+        }
     }
 
     fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32, u128)> {

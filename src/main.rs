@@ -1,5 +1,6 @@
 use network::DenseLayer;
 use network::Network;
+use sgd::dump_counters;
 use sgd::Sgd;
 
 mod mnist;
@@ -68,4 +69,7 @@ fn main() {
 
     let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
     trainer.train(10, &train_batches, &train_cat_label_batches);
+
+    println!("Performance counters");
+    dump_counters();
 }
