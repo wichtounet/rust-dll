@@ -120,7 +120,7 @@ impl<'a> Sgd<'a> {
         Some((loss, error))
     }
 
-    fn compute_metrics_dataset(&mut self, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+    pub fn compute_metrics_dataset(&mut self, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
         let batches = input_batches.len();
 
         let mut global_loss: f32 = 0.0;

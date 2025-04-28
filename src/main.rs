@@ -71,6 +71,12 @@ fn main() {
     let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
     trainer.train(10, &train_batches, &train_cat_label_batches);
 
+    let (loss, error) = trainer
+        .compute_metrics_dataset(&test_batches, &test_cat_label_batches)
+        .expect("Test metrics should work");
+
+    println!("test: error: {error} loss: {loss}");
+
     println!("Performance counters");
     dump_counters();
 }
