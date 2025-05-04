@@ -1,15 +1,8 @@
-use counters::dump_counters;
-use dense_layer::DenseLayer;
-use network::Network;
-use sgd::Sgd;
-
-mod counters;
-mod dense_layer;
-mod mnist;
-mod network;
-mod sgd;
-
-use crate::mnist::*;
+use dll::counters::dump_counters;
+use dll::dense_layer::DenseLayer;
+use dll::mnist::*;
+use dll::network::Network;
+use dll::sgd::Sgd;
 
 fn main() {
     let batch_size = 100;

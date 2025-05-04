@@ -4,7 +4,7 @@ use std::io::prelude::*;
 use etl::constant::cst;
 use etl::etl_expr::EtlExpr;
 use etl::matrix_2d::Matrix2d;
-use etl::reductions::{mean, sum};
+use etl::reductions::sum;
 use etl::vector::Vector;
 
 fn read_header(data: &[u8], pos: usize) -> u32 {
