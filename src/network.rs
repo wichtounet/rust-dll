@@ -43,6 +43,10 @@ pub trait Layer {
 
     fn apply_w_gradients(&mut self, gradients: &Matrix2d<f32>);
     fn apply_b_gradients(&mut self, gradients: &Vector<f32>);
+
+    fn pretty_name(&self) -> String;
+    fn output_shape(&self) -> String;
+    fn parameters(&self) -> usize;
 }
 
 pub struct DenseLayer {
@@ -170,6 +174,24 @@ impl Layer for DenseLayer {
 
         self.biases += gradients;
     }
+
+    fn pretty_name(&self) -> String {
+        if self.activation == Activation::Sigmoid {
+            "Dense (sigmoid)".to_string()
+        } else if self.activation == Activation::ReLU {
+            "Dense (relu)".to_string()
+        } else {
+            "Dense (softmax)".to_string()
+        }
+    }
+
+    fn output_shape(&self) -> String {
+        format!("[Bx{}]", self.output_size)
+    }
+
+    fn parameters(&self) -> usize {
+        return self.weights.size();
+    }
 }
 
 pub struct Network {
@@ -239,6 +261,50 @@ impl Network {
 
     pub fn forward_batch_layer(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
         self.layers[layer].forward_batch(input, output);
+    }
+
+    pub fn pretty_print(&self) {
+        let mut rows = Vec::new();
+
+        let headers = vec!["Index".to_string(), "Layer".to_string(), "Parameters".to_string(), "Output Shape".to_string()];
+        rows.push(headers);
+
+        for (i, layer) in self.layers.iter().enumerate() {
+            let row = vec![i.to_string(), layer.pretty_name(), layer.parameters().to_string(), layer.output_shape()];
+            rows.push(row);
+        }
+
+        let mut widths = Vec::<usize>::new();
+
+        for row in &rows {
+            for (i, column) in row.iter().enumerate() {
+                if widths.len() > i {
+                    widths[i] = std::cmp::max(widths[i], column.len());
+                } else {
+                    widths.push(column.len());
+                }
+            }
+        }
+
+        let max_width = 1 + widths.iter().sum::<usize>() + 3 * widths.len();
+
+        for (i, row) in rows.iter().enumerate() {
+            if i == 0 {
+                println!("{}", "-".repeat(max_width));
+            }
+
+            print!("| ");
+
+            for (i, column) in row.iter().enumerate() {
+                print!("{:1$} | ", column, widths[i]);
+            }
+
+            println!();
+
+            if i == 0 || i == rows.len() - 1 {
+                println!("{}", "-".repeat(max_width));
+            }
+        }
     }
 }
 

@@ -33,6 +33,8 @@ fn main() {
     mlp.add_layer(Box::new(DenseLayer::new_sigmoid(500, 500)));
     mlp.add_layer(Box::new(DenseLayer::new_stable_softmax(500, 10)));
 
+    mlp.pretty_print();
+
     let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
     trainer.train(10, &train_batches, &train_cat_label_batches);
 
