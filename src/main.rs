@@ -1,9 +1,10 @@
 use counters::dump_counters;
-use network::DenseLayer;
+use dense_layer::DenseLayer;
 use network::Network;
 use sgd::Sgd;
 
 mod counters;
+mod dense_layer;
 mod mnist;
 mod network;
 mod sgd;
