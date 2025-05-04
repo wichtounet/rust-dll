@@ -310,6 +310,8 @@ impl<'a> Sgd<'a> {
     }
 
     pub fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+        println!("Train the network with \"Stochastic Gradient Descent\"");
+
         for epoch in 1..epochs {
             let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epoch, input_batches, label_batches)?;
 
