@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 lazy_static! {
     static ref COUNTERS: Mutex<HashMap<&'static str, u128>> = {
