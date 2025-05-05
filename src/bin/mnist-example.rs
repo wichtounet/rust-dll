@@ -1,4 +1,4 @@
-use dll::counters::dump_counters;
+use dll::counters::{dump_counters, dump_counters_pretty};
 use dll::dataset::MemoryDataset;
 use dll::dense_layer::DenseLayer;
 use dll::mnist::*;
@@ -40,5 +40,5 @@ fn main() {
     println!("test: error: {error} loss: {loss}");
 
     println!("Performance counters");
-    dump_counters();
+    dump_counters_pretty();
 }
