@@ -97,7 +97,7 @@ pub fn dump_counters_pretty() {
             result.name.to_string(),
             result.count.to_string(),
             format!("{}ms", result.duration),
-            format!("{}ms", result.duration & result.count),
+            format!("{:.3}ms", result.duration as f64 / result.count as f64),
         ];
         rows.push(row);
     }

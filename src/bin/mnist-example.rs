@@ -34,7 +34,7 @@ fn main() {
     mlp.pretty_print();
 
     let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
-    trainer.train(10, &mut train_dataset);
+    trainer.train(1, &mut train_dataset);
 
     let (loss, error) = trainer.compute_metrics_dataset(&mut test_dataset).expect("Test metrics should work");
     println!("test: error: {error} loss: {loss}");
