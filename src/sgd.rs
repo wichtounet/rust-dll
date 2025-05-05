@@ -85,7 +85,7 @@ impl<'a> Sgd<'a> {
     }
 
     fn compute_metrics_batch(&mut self, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>, normalize: bool) -> Option<(f32, f32)> {
-        let _counter = Counter::new("compute_metrics");
+        let _counter = Counter::new("sgd::compute_metrics");
 
         let layers = self.network.layers();
         let last_layer = layers - 1;
@@ -139,6 +139,8 @@ impl<'a> Sgd<'a> {
     }
 
     fn train_batch(&mut self, _epoch: usize, input_batch: &Matrix2d<f32>, label_batch: &Matrix2d<f32>) -> Option<(f32, f32)> {
+        let _counter = Counter::new("sgd:train:batch");
+
         let layers = self.network.layers();
         let last_layer = layers - 1;
 
@@ -289,6 +291,8 @@ impl<'a> Sgd<'a> {
     }
 
     fn train_epoch(&mut self, epoch: usize, dataset: &mut dyn Dataset) -> Option<(f32, f32, u128)> {
+        let _counter = Counter::new("sgd:train:epoch");
+
         let start = Instant::now();
 
         let batches = dataset.batches();
@@ -316,6 +320,8 @@ impl<'a> Sgd<'a> {
     }
 
     pub fn train(&mut self, epochs: usize, dataset: &mut dyn Dataset) -> Option<(f32, f32)> {
+        let _counter = Counter::new("sgd:train");
+
         println!("Train the network with \"Stochastic Gradient Descent\"");
 
         for epoch in 1..epochs {
