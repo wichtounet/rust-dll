@@ -35,7 +35,7 @@ fn main() {
 
     train_dataset.enable_shuffling();
 
-    let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
+    let mut trainer = Sgd::new_nadam(&mut mlp, batch_size, false);
     trainer.train(10, &mut train_dataset);
 
     let (loss, error) = trainer.compute_metrics_dataset(&mut test_dataset).expect("Test metrics should work");
