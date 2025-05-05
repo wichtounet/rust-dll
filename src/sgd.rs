@@ -315,6 +315,7 @@ impl<'a> Sgd<'a> {
                     self.b_inc[layer] = Some(b_inc);
                     self.w_inc[layer] = Some(w_inc);
                 } else if self.method == TrainMethod::NAdam {
+                    // TODO: This currently does not work
                     let mut w_m = self.w_m[layer].take()?;
                     let mut b_m = self.b_m[layer].take()?;
 
@@ -335,12 +336,13 @@ impl<'a> Sgd<'a> {
                     let momentum_cache_t = beta1 * (1.0 - 0.5 * (0.96_f32.powf(t * schedule_decay)));
                     let momentum_cache_t_1 = beta1 * (1.0 - 0.5 * (0.96_f32.powf((t + 1.0) * schedule_decay)));
 
-                    let m_schedule_new = self.schedule[layer] * momentum_cache_t;
-                    let m_schedule_next = self.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
+                    let w_m_schedule_new = self.schedule[layer] * momentum_cache_t;
+                    let w_m_schedule_next = self.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
 
-                    if layer == 0 {
-                        self.schedule[layer] = m_schedule_new;
-                    }
+                    let b_m_schedule_new = 1.0 * momentum_cache_t;
+                    let b_m_schedule_next = 1.0 * momentum_cache_t * momentum_cache_t_1;
+
+                    self.schedule[layer] = w_m_schedule_new;
 
                     // Standard Adam estimations of the first and second order moments
                     // Again, thanks to the borrow checker, we must split the expressions
@@ -362,19 +364,25 @@ impl<'a> Sgd<'a> {
 
                     // Update the parameters
 
-                    let f1 = 1.0 - momentum_cache_t;
-                    let f2 = 1.0 - m_schedule_new;
+                    let w_f1 = 1.0 - momentum_cache_t;
+                    let w_f2 = 1.0 - w_m_schedule_new;
 
-                    let m1 = self.learning_rate * (f1 / f2);
-                    let m2 = self.learning_rate * momentum_cache_t_1;
+                    let w_m1 = self.learning_rate * (w_f1 / w_f2);
+                    let w_m2 = self.learning_rate * momentum_cache_t_1;
+
+                    let b_f1 = 1.0 - momentum_cache_t;
+                    let b_f2 = 1.0 - b_m_schedule_new;
+
+                    let b_m1 = self.learning_rate * (b_f1 / b_f2);
+                    let b_m2 = self.learning_rate * momentum_cache_t_1;
 
                     // Compute the gradients
 
-                    w_t |= ((cst(m1) >> &w_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &w_m)) / (sqrt(&w_v / cst(1.0 - beta2.powf(t))) + cst(e));
-                    w_gradients |= &w_t;
+                    w_t |= ((cst(w_m1) >> &w_gradients) + (cst(w_m2 / (1.0 - w_m_schedule_next)) >> &w_m)) / (sqrt(&w_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                    b_t |= ((cst(b_m1) >> &b_gradients) + (cst(b_m2 / (1.0 - b_m_schedule_next)) >> &b_m)) / (sqrt(&b_v / cst(1.0 - beta2.powf(t))) + cst(e));
 
-                    b_t |= ((cst(m1) >> &b_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &b_m)) / (sqrt(&b_v / cst(1.0 - beta2.powf(t))) + cst(e));
-                    b_gradients |= &b_t;
+                    self.network.get_layer_mut(layer).apply_w_gradients(&w_t);
+                    self.network.get_layer_mut(layer).apply_b_gradients(&b_t);
 
                     self.b_t[layer] = Some(b_t);
                     self.w_t[layer] = Some(w_t);
