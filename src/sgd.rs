@@ -26,15 +26,15 @@ pub struct Sgd<'a> {
     errors: Vec<Option<Matrix2d<f32>>>,
     w_gradients: Vec<Option<Matrix2d<f32>>>,
     b_gradients: Vec<Option<Vector<f32>>>,
-    w_inc: Vec<Option<Matrix2d<f32>>>, // For Momentum
-    b_inc: Vec<Option<Vector<f32>>>,   // For Momentum
-    w_m: Vec<Option<Matrix2d<f32>>>,   // For Momentum
-    b_m: Vec<Option<Vector<f32>>>,     // For Momentum
-    w_v: Vec<Option<Matrix2d<f32>>>,   // For NAdam
-    b_v: Vec<Option<Vector<f32>>>,     // For NAdam
-    w_t: Vec<Option<Matrix2d<f32>>>,   // For NAdam
-    b_t: Vec<Option<Vector<f32>>>,     // For NAdam
-    schedule: Vec<f32>,                // For NAdam
+    w_inc: Vec<Matrix2d<f32>>,       // For Momentum
+    b_inc: Vec<Vector<f32>>,         // For Momentum
+    w_m: Vec<Option<Matrix2d<f32>>>, // For Momentum
+    b_m: Vec<Option<Vector<f32>>>,   // For Momentum
+    w_v: Vec<Option<Matrix2d<f32>>>, // For NAdam
+    b_v: Vec<Option<Vector<f32>>>,   // For NAdam
+    w_t: Vec<Option<Matrix2d<f32>>>, // For NAdam
+    b_t: Vec<Option<Vector<f32>>>,   // For NAdam
+    schedule: Vec<f32>,              // For NAdam
     iteration: usize,
     batch_size: usize,
     method: TrainMethod,
@@ -104,8 +104,8 @@ impl<'a> Sgd<'a> {
             trainer.b_gradients.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
 
             if trainer.method == TrainMethod::Momentum {
-                trainer.w_inc.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
-                trainer.b_inc.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+                trainer.w_inc.push(trainer.network.get_layer(layer).new_w_gradients());
+                trainer.b_inc.push(trainer.network.get_layer(layer).new_b_gradients());
             }
 
             if trainer.method == TrainMethod::NAdam {
@@ -295,25 +295,19 @@ impl<'a> Sgd<'a> {
                     self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
                     self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
                 } else if self.method == TrainMethod::Momentum {
-                    let mut w_inc = self.w_inc[layer].take()?;
-                    let mut b_inc = self.b_inc[layer].take()?;
-
                     // Since Rust is pretty limited by its borrow-checker, we cannot really combine
                     // proper expressions with mut and non-mut `c`, so we must split the true operation
                     // in two compound operation
                     // This will have a significant performance cost
 
-                    w_inc >>= cst(self.momentum);
-                    b_inc >>= cst(self.momentum);
+                    self.w_inc[layer] >>= cst(self.momentum);
+                    self.b_inc[layer] >>= cst(self.momentum);
 
-                    w_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &w_gradients;
-                    b_inc += cst(self.learning_rate / (self.batch_size as f32)) >> &b_gradients;
+                    self.w_inc[layer] += cst(self.learning_rate / (self.batch_size as f32)) >> &w_gradients;
+                    self.b_inc[layer] += cst(self.learning_rate / (self.batch_size as f32)) >> &b_gradients;
 
-                    self.network.get_layer_mut(layer).apply_w_gradients(&w_inc);
-                    self.network.get_layer_mut(layer).apply_b_gradients(&b_inc);
-
-                    self.b_inc[layer] = Some(b_inc);
-                    self.w_inc[layer] = Some(w_inc);
+                    self.network.get_layer_mut(layer).apply_w_gradients(&self.w_inc[layer]);
+                    self.network.get_layer_mut(layer).apply_b_gradients(&self.b_inc[layer]);
                 } else if self.method == TrainMethod::NAdam {
                     // TODO: This currently does not work
                     let mut w_m = self.w_m[layer].take()?;
