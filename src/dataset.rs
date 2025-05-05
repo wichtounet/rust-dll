@@ -4,6 +4,7 @@ use rand::Rng;
 
 pub trait Dataset {
     fn next_batch(&mut self) -> bool;
+    fn last(&self) -> bool;
     fn reset(&mut self);
     fn reset_before_epoch(&mut self);
 
@@ -11,6 +12,7 @@ pub trait Dataset {
     fn label_batch(&self) -> &Matrix2d<f32>;
 
     fn batches(&self) -> usize;
+    fn index(&self) -> usize;
 }
 
 pub struct MemoryDataset {
@@ -38,7 +40,15 @@ impl MemoryDataset {
 impl Dataset for MemoryDataset {
     fn next_batch(&mut self) -> bool {
         self.current_batch += 1;
-        self.current_batch < self.input_batches.len()
+        self.current_batch < self.batches()
+    }
+
+    fn last(&self) -> bool {
+        self.current_batch == self.batches() - 1
+    }
+
+    fn index(&self) -> usize {
+        self.current_batch
     }
 
     fn reset(&mut self) {

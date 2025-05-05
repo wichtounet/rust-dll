@@ -295,30 +295,20 @@ impl<'a> Sgd<'a> {
 
         let start = Instant::now();
 
-        let batches = dataset.batches();
-        let last_batch = batches - 1;
-
         dataset.reset_before_epoch();
 
-        // TODO Avoid iterating through batches like this
+        let mut last_loss = 0.0;
+        let mut last_error = 0.0;
 
-        for i in 0..batches - 1 {
-            let (loss, error) = self.train_batch(epoch, dataset.input_batch(), dataset.label_batch())?;
+        while dataset.next_batch() {
+            (last_loss, last_error) = self.train_batch(epoch, dataset.input_batch(), dataset.label_batch())?;
             if self.verbose {
-                println!("epoch {epoch} batch {i}/{batches} error: {error} loss: {loss}");
+                println!("epoch {epoch} batch {}/{} error: {last_error} loss: {last_loss}", dataset.index(), dataset.batches());
             }
-
-            dataset.next_batch();
-        }
-
-        let (loss, error) = self.train_batch(epoch, dataset.input_batch(), dataset.label_batch())?;
-        if self.verbose {
-            println!("epoch {epoch} batch {last_batch}/{batches} error: {error} loss: {loss}");
         }
 
         let duration = start.elapsed();
-
-        Some((loss, error, duration.as_millis()))
+        Some((last_loss, last_error, duration.as_millis()))
     }
 
     pub fn train(&mut self, epochs: usize, dataset: &mut dyn Dataset) -> Option<(f32, f32)> {
