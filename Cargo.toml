@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 etl = { git = "https://github.com/wichtounet/rust-etl.git" }
 lazy_static = "1.5.0"
+rand = "0.9.1"

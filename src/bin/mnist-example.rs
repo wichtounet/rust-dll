@@ -1,4 +1,4 @@
-use dll::counters::{dump_counters, dump_counters_pretty};
+use dll::counters::dump_counters_pretty;
 use dll::dataset::MemoryDataset;
 use dll::dense_layer::DenseLayer;
 use dll::mnist::*;
@@ -33,8 +33,10 @@ fn main() {
 
     mlp.pretty_print();
 
+    train_dataset.enable_shuffling();
+
     let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
-    trainer.train(1, &mut train_dataset);
+    trainer.train(10, &mut train_dataset);
 
     let (loss, error) = trainer.compute_metrics_dataset(&mut test_dataset).expect("Test metrics should work");
     println!("test: error: {error} loss: {loss}");

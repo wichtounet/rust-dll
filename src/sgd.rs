@@ -298,6 +298,8 @@ impl<'a> Sgd<'a> {
         let batches = dataset.batches();
         let last_batch = batches - 1;
 
+        dataset.reset_before_epoch();
+
         // TODO Avoid iterating through batches like this
 
         for i in 0..batches - 1 {
