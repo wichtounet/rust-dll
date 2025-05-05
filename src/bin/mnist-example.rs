@@ -1,4 +1,5 @@
 use dll::counters::dump_counters;
+use dll::dataset::MemoryDataset;
 use dll::dense_layer::DenseLayer;
 use dll::mnist::*;
 use dll::network::Network;
@@ -22,6 +23,9 @@ fn main() {
     let test_cat_label_batches = categorical_labels_to_batches(&test_cat_labels, batch_size);
     let train_cat_label_batches = categorical_labels_to_batches(&train_cat_labels, batch_size);
 
+    let mut train_dataset = MemoryDataset::new(train_batches, train_cat_label_batches);
+    let mut test_dataset = MemoryDataset::new(test_batches, test_cat_label_batches);
+
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new_sigmoid(28 * 28, 500)));
     mlp.add_layer(Box::new(DenseLayer::new_sigmoid(500, 500)));
@@ -30,12 +34,9 @@ fn main() {
     mlp.pretty_print();
 
     let mut trainer = Sgd::new_momentum(&mut mlp, batch_size, false);
-    trainer.train(10, &train_batches, &train_cat_label_batches);
+    trainer.train(10, &mut train_dataset);
 
-    let (loss, error) = trainer
-        .compute_metrics_dataset(&test_batches, &test_cat_label_batches)
-        .expect("Test metrics should work");
-
+    let (loss, error) = trainer.compute_metrics_dataset(&mut test_dataset).expect("Test metrics should work");
     println!("test: error: {error} loss: {loss}");
 
     println!("Performance counters");

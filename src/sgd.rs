@@ -9,6 +9,7 @@ use etl::vector::Vector;
 use std::time::Instant;
 
 use crate::counters::*;
+use crate::dataset::Dataset;
 use crate::network::Network;
 
 #[derive(PartialEq)]
@@ -120,14 +121,15 @@ impl<'a> Sgd<'a> {
         Some((loss, error))
     }
 
-    pub fn compute_metrics_dataset(&mut self, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
-        let batches = input_batches.len();
+    pub fn compute_metrics_dataset(&mut self, dataset: &mut dyn Dataset) -> Option<(f32, f32)> {
+        let batches = dataset.batches();
 
         let mut global_loss: f32 = 0.0;
         let mut global_error: f32 = 0.0;
 
-        for batch in 0..batches {
-            let (loss, error) = self.compute_metrics_batch(&input_batches[batch], &label_batches[batch], false)?;
+        dataset.reset();
+        while dataset.next_batch() {
+            let (loss, error) = self.compute_metrics_batch(&dataset.input_batch(), &dataset.label_batch(), false)?;
 
             global_loss += loss;
             global_error += error;
@@ -286,20 +288,24 @@ impl<'a> Sgd<'a> {
         }
     }
 
-    fn train_epoch(&mut self, epoch: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32, u128)> {
+    fn train_epoch(&mut self, epoch: usize, dataset: &mut dyn Dataset) -> Option<(f32, f32, u128)> {
         let start = Instant::now();
 
-        let batches = input_batches.len();
+        let batches = dataset.batches();
         let last_batch = batches - 1;
 
+        // TODO Avoid iterating through batches like this
+
         for i in 0..batches - 1 {
-            let (loss, error) = self.train_batch(epoch, &input_batches[i], &label_batches[i])?;
+            let (loss, error) = self.train_batch(epoch, dataset.input_batch(), dataset.label_batch())?;
             if self.verbose {
                 println!("epoch {epoch} batch {i}/{batches} error: {error} loss: {loss}");
             }
+
+            dataset.next_batch();
         }
 
-        let (loss, error) = self.train_batch(epoch, &input_batches[last_batch], &label_batches[last_batch])?;
+        let (loss, error) = self.train_batch(epoch, dataset.input_batch(), dataset.label_batch())?;
         if self.verbose {
             println!("epoch {epoch} batch {last_batch}/{batches} error: {error} loss: {loss}");
         }
@@ -309,19 +315,19 @@ impl<'a> Sgd<'a> {
         Some((loss, error, duration.as_millis()))
     }
 
-    pub fn train(&mut self, epochs: usize, input_batches: &Vec<Matrix2d<f32>>, label_batches: &Vec<Matrix2d<f32>>) -> Option<(f32, f32)> {
+    pub fn train(&mut self, epochs: usize, dataset: &mut dyn Dataset) -> Option<(f32, f32)> {
         println!("Train the network with \"Stochastic Gradient Descent\"");
 
         for epoch in 1..epochs {
-            let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epoch, input_batches, label_batches)?;
+            let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epoch, dataset)?;
 
-            let (loss, error) = self.compute_metrics_dataset(input_batches, label_batches)?;
+            let (loss, error) = self.compute_metrics_dataset(dataset)?;
             println!("epoch {epoch}/{epochs} error: {error} loss: {loss} time: {millis}ms");
         }
 
-        let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epochs, input_batches, label_batches)?;
+        let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epochs, dataset)?;
 
-        let (loss, error) = self.compute_metrics_dataset(input_batches, label_batches)?;
+        let (loss, error) = self.compute_metrics_dataset(dataset)?;
         println!("epoch {epochs}/{epochs} error: {error} loss: {loss} time: {millis}ms");
 
         Some((loss, error))

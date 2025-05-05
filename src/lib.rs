@@ -1,4 +1,5 @@
 pub mod counters;
+pub mod dataset;
 pub mod dense_layer;
 pub mod mnist;
 pub mod network;
