@@ -5,6 +5,7 @@ use etl::log_expr::log;
 use etl::matrix_2d::Matrix2d;
 use etl::min_expr::binary_min;
 use etl::reductions::sum;
+use etl::sqrt_expr::sqrt;
 use etl::vector::Vector;
 use std::time::Instant;
 
@@ -16,6 +17,7 @@ use crate::network::Network;
 pub enum TrainMethod {
     Sgd,
     Momentum,
+    NAdam, // Nesterov Adam
 }
 
 pub struct Sgd<'a> {
@@ -24,12 +26,23 @@ pub struct Sgd<'a> {
     errors: Vec<Option<Matrix2d<f32>>>,
     w_gradients: Vec<Option<Matrix2d<f32>>>,
     b_gradients: Vec<Option<Vector<f32>>>,
-    w_inc: Vec<Option<Matrix2d<f32>>>,
-    b_inc: Vec<Option<Vector<f32>>>,
+    w_inc: Vec<Option<Matrix2d<f32>>>, // For Momentum
+    b_inc: Vec<Option<Vector<f32>>>,   // For Momentum
+    w_m: Vec<Option<Matrix2d<f32>>>,   // For Momentum
+    b_m: Vec<Option<Vector<f32>>>,     // For Momentum
+    w_v: Vec<Option<Matrix2d<f32>>>,   // For NAdam
+    b_v: Vec<Option<Vector<f32>>>,     // For NAdam
+    w_t: Vec<Option<Matrix2d<f32>>>,   // For NAdam
+    b_t: Vec<Option<Vector<f32>>>,     // For NAdam
+    schedule: Vec<f32>,                // For NAdam
+    iteration: usize,
     batch_size: usize,
     method: TrainMethod,
     learning_rate: f32,
     momentum: f32,
+    adam_beta1: f32,
+    adam_beta2: f32,
+    nadam_schedule_decay: f32,
     verbose: bool,
 }
 
@@ -42,6 +55,10 @@ impl<'a> Sgd<'a> {
         Self::new(network, batch_size, verbose, TrainMethod::Momentum)
     }
 
+    pub fn new_nadam(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
+        Self::new(network, batch_size, verbose, TrainMethod::NAdam)
+    }
+
     pub fn new(network: &'a mut Network, batch_size: usize, verbose: bool, method: TrainMethod) -> Self {
         let mut trainer = Self {
             network,
@@ -51,10 +68,21 @@ impl<'a> Sgd<'a> {
             b_gradients: Vec::new(),
             w_inc: Vec::new(),
             b_inc: Vec::new(),
+            w_m: Vec::new(),
+            b_m: Vec::new(),
+            w_v: Vec::new(),
+            b_v: Vec::new(),
+            w_t: Vec::new(),
+            b_t: Vec::new(),
+            schedule: Vec::new(),
+            iteration: 1,
             batch_size,
             method,
             learning_rate: 0.1,
             momentum: 0.9,
+            adam_beta1: 0.9,
+            adam_beta2: 0.999,
+            nadam_schedule_decay: 0.004,
             verbose,
         };
 
@@ -78,6 +106,16 @@ impl<'a> Sgd<'a> {
             if trainer.method == TrainMethod::Momentum {
                 trainer.w_inc.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
                 trainer.b_inc.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+            }
+
+            if trainer.method == TrainMethod::NAdam {
+                trainer.w_m.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
+                trainer.b_m.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+                trainer.w_v.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
+                trainer.b_v.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+                trainer.w_t.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
+                trainer.b_t.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+                trainer.schedule.push(1.0);
             }
         }
 
@@ -276,12 +314,84 @@ impl<'a> Sgd<'a> {
 
                     self.b_inc[layer] = Some(b_inc);
                     self.w_inc[layer] = Some(w_inc);
+                } else if self.method == TrainMethod::NAdam {
+                    let mut w_m = self.w_m[layer].take()?;
+                    let mut b_m = self.b_m[layer].take()?;
+
+                    let mut w_v = self.w_v[layer].take()?;
+                    let mut b_v = self.b_v[layer].take()?;
+
+                    let mut w_t = self.w_t[layer].take()?;
+                    let mut b_t = self.b_t[layer].take()?;
+
+                    let beta1 = self.adam_beta1;
+                    let beta2 = self.adam_beta2;
+                    let schedule_decay = self.nadam_schedule_decay;
+                    let e = 1e-8;
+                    let t = self.iteration as f32;
+
+                    // Compute the schedule for momentum
+
+                    let momentum_cache_t = beta1 * (1.0 - 0.5 * (0.96_f32.powf(t * schedule_decay)));
+                    let momentum_cache_t_1 = beta1 * (1.0 - 0.5 * (0.96_f32.powf((t + 1.0) * schedule_decay)));
+
+                    let m_schedule_new = self.schedule[layer] * momentum_cache_t;
+                    let m_schedule_next = self.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
+
+                    if layer == 0 {
+                        self.schedule[layer] = m_schedule_new;
+                    }
+
+                    // Standard Adam estimations of the first and second order moments
+                    // Again, thanks to the borrow checker, we must split the expressions
+
+                    w_m >>= cst(beta1);
+                    w_m += cst(1.0 - beta1) >> &w_gradients;
+
+                    w_v >>= cst(beta2);
+                    w_v += cst(1.0 - beta2) >> (&w_gradients >> &w_gradients);
+
+                    b_m >>= cst(beta1);
+                    b_m += cst(1.0 - beta1) >> &b_gradients;
+
+                    b_v >>= cst(beta2);
+                    b_v += cst(1.0 - beta2) >> (&b_gradients >> &b_gradients);
+
+                    // Correct the bias towards zero of the first and second moments
+                    // For performance and memory, we inline this in the last step
+
+                    // Update the parameters
+
+                    let f1 = 1.0 - momentum_cache_t;
+                    let f2 = 1.0 - m_schedule_new;
+
+                    let m1 = self.learning_rate * (f1 / f2);
+                    let m2 = self.learning_rate * momentum_cache_t_1;
+
+                    // Compute the gradients
+
+                    w_t |= ((cst(m1) >> &w_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &w_m)) / (sqrt(&w_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                    w_gradients |= &w_t;
+
+                    b_t |= ((cst(m1) >> &b_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &b_m)) / (sqrt(&b_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                    b_gradients |= &b_t;
+
+                    self.b_t[layer] = Some(b_t);
+                    self.w_t[layer] = Some(w_t);
+
+                    self.b_v[layer] = Some(b_v);
+                    self.w_v[layer] = Some(w_v);
+
+                    self.b_m[layer] = Some(b_m);
+                    self.w_m[layer] = Some(w_m);
                 }
 
                 self.b_gradients[layer] = Some(b_gradients);
                 self.w_gradients[layer] = Some(w_gradients);
             }
         }
+
+        self.iteration += 1;
 
         // Compute the category cross entropy loss and error
 
