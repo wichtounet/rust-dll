@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use crate::table::print_table;
+
 lazy_static! {
     static ref COUNTERS: Mutex<HashMap<&'static str, (u128, u128)>> = {
         let counters = HashMap::<&'static str, (u128, u128)>::new();
@@ -102,35 +104,5 @@ pub fn dump_counters_pretty() {
         rows.push(row);
     }
 
-    let mut widths = Vec::<usize>::new();
-
-    for row in &rows {
-        for (i, column) in row.iter().enumerate() {
-            if widths.len() > i {
-                widths[i] = std::cmp::max(widths[i], column.len());
-            } else {
-                widths.push(column.len());
-            }
-        }
-    }
-
-    let max_width = 1 + widths.iter().sum::<usize>() + 3 * widths.len();
-
-    for (i, row) in rows.iter().enumerate() {
-        if i == 0 {
-            println!("{}", "-".repeat(max_width));
-        }
-
-        print!("| ");
-
-        for (i, column) in row.iter().enumerate() {
-            print!("{:1$} | ", column, widths[i]);
-        }
-
-        println!();
-
-        if i == 0 || i == rows.len() - 1 {
-            println!("{}", "-".repeat(max_width));
-        }
-    }
+    print_table(rows);
 }
