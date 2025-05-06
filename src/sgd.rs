@@ -20,6 +20,16 @@ pub enum TrainMethod {
     NAdam, // Nesterov Adam
 }
 
+impl TrainMethod {
+    pub fn to_string(&self) -> &str {
+        match self {
+            TrainMethod::Sgd => "SGD",
+            TrainMethod::Momentum => "Momentum",
+            TrainMethod::NAdam => "Nesterov Adam",
+        }
+    }
+}
+
 pub struct Sgd<'a> {
     network: &'a mut Network,
     outputs: Vec<Option<Matrix2d<f32>>>,
@@ -412,6 +422,7 @@ impl<'a> Sgd<'a> {
         let _counter = Counter::new("sgd:train");
 
         println!("Train the network with \"Stochastic Gradient Descent\"");
+        println!("            Optimizer: \"{}\"", self.method.to_string());
 
         for epoch in 1..epochs {
             let (_epoch_loss, _epoch_error, millis) = self.train_epoch(epoch, dataset)?;
