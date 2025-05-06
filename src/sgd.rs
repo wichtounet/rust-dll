@@ -24,8 +24,8 @@ pub struct Sgd<'a> {
     network: &'a mut Network,
     outputs: Vec<Option<Matrix2d<f32>>>,
     errors: Vec<Option<Matrix2d<f32>>>,
-    w_gradients: Vec<Option<Matrix2d<f32>>>,
-    b_gradients: Vec<Option<Vector<f32>>>,
+    w_gradients: Vec<Matrix2d<f32>>,
+    b_gradients: Vec<Vector<f32>>,
     w_inc: Vec<Matrix2d<f32>>, // For Momentum
     b_inc: Vec<Vector<f32>>,   // For Momentum
     w_m: Vec<Matrix2d<f32>>,   // For Momentum
@@ -105,8 +105,8 @@ impl<'a> Sgd<'a> {
 
         // initialization of the gradients
         for layer in 0..layers {
-            trainer.w_gradients.push(Some(trainer.network.get_layer(layer).new_w_gradients()));
-            trainer.b_gradients.push(Some(trainer.network.get_layer(layer).new_b_gradients()));
+            trainer.w_gradients.push(trainer.network.get_layer(layer).new_w_gradients());
+            trainer.b_gradients.push(trainer.network.get_layer(layer).new_b_gradients());
 
             if trainer.method == TrainMethod::Momentum {
                 trainer.w_inc.push(trainer.network.get_layer(layer).new_w_gradients());
@@ -261,25 +261,23 @@ impl<'a> Sgd<'a> {
             let _counter = Counter::new("sgd: compute_gradients");
 
             for layer in 0..layers {
-                let mut w_gradients = self.w_gradients[layer].take()?;
-                let mut b_gradients = self.b_gradients[layer].take()?;
+                let w_gradients = &mut self.w_gradients[layer];
+                let b_gradients = &mut self.b_gradients[layer];
                 let errors = self.errors[layer].take()?;
 
                 if layer == 0 {
-                    self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, input_batch, &errors);
-                    self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, input_batch, &errors);
+                    self.network.get_layer(layer).compute_w_gradients(w_gradients, input_batch, &errors);
+                    self.network.get_layer(layer).compute_b_gradients(b_gradients, input_batch, &errors);
                 } else {
                     let input = self.outputs[layer - 1].take()?;
 
-                    self.network.get_layer(layer).compute_w_gradients(&mut w_gradients, &input, &errors);
-                    self.network.get_layer(layer).compute_b_gradients(&mut b_gradients, &input, &errors);
+                    self.network.get_layer(layer).compute_w_gradients(w_gradients, &input, &errors);
+                    self.network.get_layer(layer).compute_b_gradients(b_gradients, &input, &errors);
 
                     self.outputs[layer - 1] = Some(input);
                 }
 
                 self.errors[layer] = Some(errors);
-                self.b_gradients[layer] = Some(b_gradients);
-                self.w_gradients[layer] = Some(w_gradients);
             }
         }
 
@@ -292,15 +290,15 @@ impl<'a> Sgd<'a> {
             let eps = self.learning_rate;
 
             for layer in 0..layers {
-                let mut w_gradients = self.w_gradients[layer].take()?;
-                let mut b_gradients = self.b_gradients[layer].take()?;
+                let w_gradients = &mut self.w_gradients[layer];
+                let b_gradients = &mut self.b_gradients[layer];
 
                 if self.method == TrainMethod::Sgd {
-                    w_gradients >>= cst(eps / (self.batch_size as f32));
-                    b_gradients >>= cst(eps / (self.batch_size as f32));
+                    *w_gradients >>= cst(eps / (self.batch_size as f32));
+                    *b_gradients >>= cst(eps / (self.batch_size as f32));
 
-                    self.network.get_layer_mut(layer).apply_w_gradients(&w_gradients);
-                    self.network.get_layer_mut(layer).apply_b_gradients(&b_gradients);
+                    self.network.get_layer_mut(layer).apply_w_gradients(&*w_gradients);
+                    self.network.get_layer_mut(layer).apply_b_gradients(&*b_gradients);
                 } else if self.method == TrainMethod::Momentum {
                     // Since Rust is pretty limited by its borrow-checker, we cannot really combine
                     // proper expressions with mut and non-mut `c`, so we must split the true operation
@@ -310,8 +308,8 @@ impl<'a> Sgd<'a> {
                     self.w_inc[layer] >>= cst(self.momentum);
                     self.b_inc[layer] >>= cst(self.momentum);
 
-                    self.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &w_gradients;
-                    self.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &b_gradients;
+                    self.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*w_gradients;
+                    self.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*b_gradients;
 
                     self.network.get_layer_mut(layer).apply_w_gradients(&self.w_inc[layer]);
                     self.network.get_layer_mut(layer).apply_b_gradients(&self.b_inc[layer]);
@@ -347,16 +345,16 @@ impl<'a> Sgd<'a> {
                     // Again, thanks to the borrow checker, we must split the expressions
 
                     *w_m >>= cst(beta1);
-                    *w_m += cst(1.0 - beta1) >> &w_gradients;
+                    *w_m += cst(1.0 - beta1) >> &*w_gradients;
 
                     *w_v >>= cst(beta2);
-                    *w_v += cst(1.0 - beta2) >> (&w_gradients >> &w_gradients);
+                    *w_v += cst(1.0 - beta2) >> (&*w_gradients >> &*w_gradients);
 
                     *b_m >>= cst(beta1);
-                    *b_m += cst(1.0 - beta1) >> &b_gradients;
+                    *b_m += cst(1.0 - beta1) >> &*b_gradients;
 
                     *b_v >>= cst(beta2);
-                    *b_v += cst(1.0 - beta2) >> (&b_gradients >> &b_gradients);
+                    *b_v += cst(1.0 - beta2) >> (&*b_gradients >> &*b_gradients);
 
                     // Correct the bias towards zero of the first and second moments
                     // For performance and memory, we inline this in the last step
@@ -371,15 +369,12 @@ impl<'a> Sgd<'a> {
 
                     // Compute the gradients
 
-                    *w_t |= ((cst(m1) >> &w_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*w_m)) / (sqrt(&*w_v / cst(1.0 - beta2.powf(t))) + cst(e));
-                    *b_t |= ((cst(m1) >> &b_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*b_m)) / (sqrt(&*b_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                    *w_t |= ((cst(m1) >> &*w_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*w_m)) / (sqrt(&*w_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                    *b_t |= ((cst(m1) >> &*b_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*b_m)) / (sqrt(&*b_v / cst(1.0 - beta2.powf(t))) + cst(e));
 
                     self.network.get_layer_mut(layer).apply_w_gradients(w_t);
                     self.network.get_layer_mut(layer).apply_b_gradients(b_t);
                 }
-
-                self.b_gradients[layer] = Some(b_gradients);
-                self.w_gradients[layer] = Some(w_gradients);
             }
         }
 
