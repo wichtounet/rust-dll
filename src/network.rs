@@ -12,6 +12,17 @@ pub enum Activation {
     ReLU,
 }
 
+impl Activation {
+    pub fn to_string(&self) -> &str {
+        match self {
+            Activation::Sigmoid => "Sigmoid",
+            Activation::Softmax => "Softmax",
+            Activation::StableSoftmax => "Softmax (stable)",
+            Activation::ReLU => "ReLU",
+        }
+    }
+}
+
 pub trait Layer {
     fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
     fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);

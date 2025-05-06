@@ -145,13 +145,7 @@ impl Layer for DenseLayer {
     }
 
     fn pretty_name(&self) -> String {
-        if self.activation == Activation::Sigmoid {
-            "Dense (sigmoid)".to_string()
-        } else if self.activation == Activation::ReLU {
-            "Dense (relu)".to_string()
-        } else {
-            "Dense (softmax)".to_string()
-        }
+        format!("Dense ({})", self.activation.to_string())
     }
 
     fn output_shape(&self) -> String {
@@ -159,7 +153,7 @@ impl Layer for DenseLayer {
     }
 
     fn parameters(&self) -> usize {
-        return self.weights.size();
+        self.weights.size()
     }
 }
 
