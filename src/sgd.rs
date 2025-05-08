@@ -149,10 +149,10 @@ impl<'a> Sgd<'a> {
             let mut output = self.outputs[layer].take()?;
 
             if layer == 0 {
-                self.network.get_layer(layer).forward_batch(input_batch, &mut output);
+                self.network.get_layer(layer).test_forward_batch(input_batch, &mut output);
             } else {
                 let input = self.outputs[layer - 1].take()?;
-                self.network.get_layer(layer).forward_batch(&input, &mut output);
+                self.network.get_layer(layer).test_forward_batch(&input, &mut output);
                 self.outputs[layer - 1] = Some(input);
             }
 
@@ -210,10 +210,10 @@ impl<'a> Sgd<'a> {
                 let mut output = self.outputs[layer].take()?;
 
                 if layer == 0 {
-                    self.network.get_layer(layer).forward_batch(input_batch, &mut output);
+                    self.network.get_layer(layer).train_forward_batch(input_batch, &mut output);
                 } else {
                     let input = self.outputs[layer - 1].take()?;
-                    self.network.get_layer(layer).forward_batch(&input, &mut output);
+                    self.network.get_layer(layer).train_forward_batch(&input, &mut output);
                     self.outputs[layer - 1] = Some(input);
                 }
 

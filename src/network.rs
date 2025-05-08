@@ -24,8 +24,13 @@ impl Activation {
 }
 
 pub trait Layer {
-    fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
-    fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
+    // Test forward (inference)
+    fn test_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
+    fn test_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
+
+    // Train forward (inference)
+    fn train_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>);
+    fn train_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>);
 
     fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>);
     fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>);
@@ -85,35 +90,78 @@ impl Network {
     }
 
     pub fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
-        self.forward_one_impl(0, input, output);
+        self.test_forward_one_impl(0, input, output);
     }
 
-    fn forward_one_impl(&self, layer: usize, input: &Vector<f32>, output: &mut Vector<f32>) {
+    pub fn test_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
+        self.test_forward_one_impl(0, input, output);
+    }
+
+    pub fn train_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
+        self.train_forward_one_impl(0, input, output);
+    }
+
+    fn test_forward_one_impl(&self, layer: usize, input: &Vector<f32>, output: &mut Vector<f32>) {
         if layer < self.layers.len() - 1 {
             let mut next_output = self.layers[layer].new_output();
-            self.layers[layer].forward_one(input, &mut next_output);
-            self.forward_one_impl(layer + 1, &next_output, output);
+            self.layers[layer].test_forward_one(input, &mut next_output);
+            self.test_forward_one_impl(layer + 1, &next_output, output);
         } else {
-            self.layers[layer].forward_one(input, output);
+            self.layers[layer].test_forward_one(input, output);
+        }
+    }
+
+    fn train_forward_one_impl(&self, layer: usize, input: &Vector<f32>, output: &mut Vector<f32>) {
+        if layer < self.layers.len() - 1 {
+            let mut next_output = self.layers[layer].new_output();
+            self.layers[layer].train_forward_one(input, &mut next_output);
+            self.train_forward_one_impl(layer + 1, &next_output, output);
+        } else {
+            self.layers[layer].train_forward_one(input, output);
         }
     }
 
     pub fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
-        self.forward_batch_impl(0, input, output);
+        self.test_forward_batch_impl(0, input, output);
     }
 
-    fn forward_batch_impl(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+    pub fn test_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.test_forward_batch_impl(0, input, output);
+    }
+
+    pub fn train_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.train_forward_batch_impl(0, input, output);
+    }
+
+    fn test_forward_batch_impl(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
         if layer < self.layers.len() - 1 {
             let mut next_output = self.layers[layer].new_batch_output(input.rows());
-            self.layers[layer].forward_batch(input, &mut next_output);
-            self.forward_batch_impl(layer + 1, &next_output, output);
+            self.layers[layer].test_forward_batch(input, &mut next_output);
+            self.test_forward_batch_impl(layer + 1, &next_output, output);
         } else {
-            self.layers[layer].forward_batch(input, output);
+            self.layers[layer].test_forward_batch(input, output);
+        }
+    }
+
+    fn train_forward_batch_impl(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        if layer < self.layers.len() - 1 {
+            let mut next_output = self.layers[layer].new_batch_output(input.rows());
+            self.layers[layer].train_forward_batch(input, &mut next_output);
+            self.train_forward_batch_impl(layer + 1, &next_output, output);
+        } else {
+            self.layers[layer].train_forward_batch(input, output);
         }
     }
 
     pub fn forward_batch_layer(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
-        self.layers[layer].forward_batch(input, output);
+        self.layers[layer].test_forward_batch(input, output);
+    }
+
+    pub fn test_forward_batch_layer(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.layers[layer].test_forward_batch(input, output);
+    }
+    pub fn train_forward_batch_layer(&self, layer: usize, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.layers[layer].train_forward_batch(input, output);
     }
 
     pub fn pretty_print(&self) {

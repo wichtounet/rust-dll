@@ -60,7 +60,7 @@ impl DenseLayer {
 }
 
 impl Layer for DenseLayer {
-    fn forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
+    fn test_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
         if self.activation == Activation::Sigmoid {
             *output |= sigmoid(input * &self.weights + &self.biases);
         } else if self.activation == Activation::ReLU {
@@ -72,7 +72,7 @@ impl Layer for DenseLayer {
         }
     }
 
-    fn forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+    fn test_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
         let _counter = Counter::new("dense:forward");
 
         if self.activation == Activation::Sigmoid {
@@ -84,6 +84,14 @@ impl Layer for DenseLayer {
         } else {
             *output |= batch_softmax(bias_add(input * &self.weights, &self.biases));
         }
+    }
+
+    fn train_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
+        self.test_forward_one(input, output);
+    }
+
+    fn train_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
+        self.test_forward_batch(input, output);
     }
 
     fn new_output(&self) -> Vector<f32> {
