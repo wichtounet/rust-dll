@@ -16,7 +16,7 @@ use etl::transpose_expr::transpose;
 use etl::vector::Vector;
 
 use crate::counters::*;
-use crate::network::{Activation, Layer};
+use crate::layer::{Activation, Layer};
 
 pub struct DenseLayer {
     input_size: usize,
