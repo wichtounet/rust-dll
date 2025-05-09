@@ -115,22 +115,42 @@ impl<'a> Sgd<'a> {
 
         // initialization of the gradients
         for layer in 0..layers {
-            trainer.w_gradients.push(trainer.network.get_layer(layer).new_w_gradients());
-            trainer.b_gradients.push(trainer.network.get_layer(layer).new_b_gradients());
+            if trainer.network.get_layer(layer).parameters() > 0 {
+                trainer.w_gradients.push(trainer.network.get_layer(layer).new_w_gradients());
+                trainer.b_gradients.push(trainer.network.get_layer(layer).new_b_gradients());
 
-            if trainer.method == TrainMethod::Momentum {
-                trainer.w_inc.push(trainer.network.get_layer(layer).new_w_gradients());
-                trainer.b_inc.push(trainer.network.get_layer(layer).new_b_gradients());
-            }
+                if trainer.method == TrainMethod::Momentum {
+                    trainer.w_inc.push(trainer.network.get_layer(layer).new_w_gradients());
+                    trainer.b_inc.push(trainer.network.get_layer(layer).new_b_gradients());
+                }
 
-            if trainer.method == TrainMethod::NAdam {
-                trainer.w_m.push(trainer.network.get_layer(layer).new_w_gradients());
-                trainer.b_m.push(trainer.network.get_layer(layer).new_b_gradients());
-                trainer.w_v.push(trainer.network.get_layer(layer).new_w_gradients());
-                trainer.b_v.push(trainer.network.get_layer(layer).new_b_gradients());
-                trainer.w_t.push(trainer.network.get_layer(layer).new_w_gradients());
-                trainer.b_t.push(trainer.network.get_layer(layer).new_b_gradients());
-                trainer.schedule.push(1.0);
+                if trainer.method == TrainMethod::NAdam {
+                    trainer.w_m.push(trainer.network.get_layer(layer).new_w_gradients());
+                    trainer.b_m.push(trainer.network.get_layer(layer).new_b_gradients());
+                    trainer.w_v.push(trainer.network.get_layer(layer).new_w_gradients());
+                    trainer.b_v.push(trainer.network.get_layer(layer).new_b_gradients());
+                    trainer.w_t.push(trainer.network.get_layer(layer).new_w_gradients());
+                    trainer.b_t.push(trainer.network.get_layer(layer).new_b_gradients());
+                    trainer.schedule.push(1.0);
+                }
+            } else {
+                trainer.w_gradients.push(Matrix2d::new(1, 1));
+                trainer.b_gradients.push(Vector::new(1));
+
+                if trainer.method == TrainMethod::Momentum {
+                    trainer.w_inc.push(Matrix2d::new(1, 1));
+                    trainer.b_inc.push(Vector::new(1));
+                }
+
+                if trainer.method == TrainMethod::NAdam {
+                    trainer.w_m.push(Matrix2d::new(1, 1));
+                    trainer.b_m.push(Vector::new(1));
+                    trainer.w_v.push(Matrix2d::new(1, 1));
+                    trainer.b_v.push(Vector::new(1));
+                    trainer.w_t.push(Matrix2d::new(1, 1));
+                    trainer.b_t.push(Vector::new(1));
+                    trainer.schedule.push(1.0);
+                }
             }
         }
 
