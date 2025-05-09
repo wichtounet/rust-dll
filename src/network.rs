@@ -123,9 +123,15 @@ impl Network {
         let headers = vec!["Index".to_string(), "Layer".to_string(), "Parameters".to_string(), "Output Shape".to_string()];
         rows.push(headers);
 
+        let mut last_output_shape = String::new();
+
         for (i, layer) in self.layers.iter().enumerate() {
-            let row = vec![i.to_string(), layer.pretty_name(), layer.parameters().to_string(), layer.output_shape()];
-            rows.push(row);
+            if layer.reshapes() {
+                rows.push(vec![i.to_string(), layer.pretty_name(), layer.parameters().to_string(), layer.output_shape()]);
+                last_output_shape = layer.output_shape();
+            } else {
+                rows.push(vec![i.to_string(), layer.pretty_name(), layer.parameters().to_string(), last_output_shape.clone()]);
+            }
         }
 
         print_table(rows);
