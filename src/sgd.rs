@@ -103,14 +103,18 @@ impl<'a> Sgd<'a> {
 
         let layers = trainer.network.layers();
 
-        // initialization of the outputs
-        for layer in 0..layers {
-            trainer.outputs.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
-        }
+        let mut last_output = Matrix2d::<f32>::new(1, 1);
 
-        // initialization of the errors
+        // initialization of the outputs and errors
         for layer in 0..layers {
-            trainer.errors.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
+            if trainer.network.get_layer(layer).reshapes() {
+                trainer.outputs.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
+                trainer.errors.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
+                last_output = trainer.network.get_layer(layer).new_batch_output(batch_size);
+            } else {
+                trainer.outputs.push(Some(last_output.clone()));
+                trainer.errors.push(Some(last_output.clone()));
+            }
         }
 
         // initialization of the gradients
@@ -291,23 +295,25 @@ impl<'a> Sgd<'a> {
             let _counter = Counter::new("sgd: compute_gradients");
 
             for layer in 0..layers {
-                let w_gradients = &mut self.w_gradients[layer];
-                let b_gradients = &mut self.b_gradients[layer];
-                let errors = self.errors[layer].take()?;
+                if self.network.get_layer(layer).parameters() > 0 {
+                    let w_gradients = &mut self.w_gradients[layer];
+                    let b_gradients = &mut self.b_gradients[layer];
+                    let errors = self.errors[layer].take()?;
 
-                if layer == 0 {
-                    self.network.get_layer(layer).compute_w_gradients(w_gradients, input_batch, &errors);
-                    self.network.get_layer(layer).compute_b_gradients(b_gradients, input_batch, &errors);
-                } else {
-                    let input = self.outputs[layer - 1].take()?;
+                    if layer == 0 {
+                        self.network.get_layer(layer).compute_w_gradients(w_gradients, input_batch, &errors);
+                        self.network.get_layer(layer).compute_b_gradients(b_gradients, input_batch, &errors);
+                    } else {
+                        let input = self.outputs[layer - 1].take()?;
 
-                    self.network.get_layer(layer).compute_w_gradients(w_gradients, &input, &errors);
-                    self.network.get_layer(layer).compute_b_gradients(b_gradients, &input, &errors);
+                        self.network.get_layer(layer).compute_w_gradients(w_gradients, &input, &errors);
+                        self.network.get_layer(layer).compute_b_gradients(b_gradients, &input, &errors);
 
-                    self.outputs[layer - 1] = Some(input);
+                        self.outputs[layer - 1] = Some(input);
+                    }
+
+                    self.errors[layer] = Some(errors);
                 }
-
-                self.errors[layer] = Some(errors);
             }
         }
 
@@ -320,90 +326,92 @@ impl<'a> Sgd<'a> {
             let eps = self.learning_rate;
 
             for layer in 0..layers {
-                let w_gradients = &mut self.w_gradients[layer];
-                let b_gradients = &mut self.b_gradients[layer];
+                if self.network.get_layer(layer).parameters() > 0 {
+                    let w_gradients = &mut self.w_gradients[layer];
+                    let b_gradients = &mut self.b_gradients[layer];
 
-                if self.method == TrainMethod::Sgd {
-                    *w_gradients >>= cst(eps / (self.batch_size as f32));
-                    *b_gradients >>= cst(eps / (self.batch_size as f32));
+                    if self.method == TrainMethod::Sgd {
+                        *w_gradients >>= cst(eps / (self.batch_size as f32));
+                        *b_gradients >>= cst(eps / (self.batch_size as f32));
 
-                    self.network.get_layer_mut(layer).apply_w_gradients(&*w_gradients);
-                    self.network.get_layer_mut(layer).apply_b_gradients(&*b_gradients);
-                } else if self.method == TrainMethod::Momentum {
-                    // Since Rust is pretty limited by its borrow-checker, we cannot really combine
-                    // proper expressions with mut and non-mut `c`, so we must split the true operation
-                    // in two compound operation
-                    // This will have a significant performance cost
+                        self.network.get_layer_mut(layer).apply_w_gradients(&*w_gradients);
+                        self.network.get_layer_mut(layer).apply_b_gradients(&*b_gradients);
+                    } else if self.method == TrainMethod::Momentum {
+                        // Since Rust is pretty limited by its borrow-checker, we cannot really combine
+                        // proper expressions with mut and non-mut `c`, so we must split the true operation
+                        // in two compound operation
+                        // This will have a significant performance cost
 
-                    self.w_inc[layer] >>= cst(self.momentum);
-                    self.b_inc[layer] >>= cst(self.momentum);
+                        self.w_inc[layer] >>= cst(self.momentum);
+                        self.b_inc[layer] >>= cst(self.momentum);
 
-                    self.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*w_gradients;
-                    self.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*b_gradients;
+                        self.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*w_gradients;
+                        self.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*b_gradients;
 
-                    self.network.get_layer_mut(layer).apply_w_gradients(&self.w_inc[layer]);
-                    self.network.get_layer_mut(layer).apply_b_gradients(&self.b_inc[layer]);
-                } else if self.method == TrainMethod::NAdam {
-                    let w_m = &mut self.w_m[layer];
-                    let b_m = &mut self.b_m[layer];
+                        self.network.get_layer_mut(layer).apply_w_gradients(&self.w_inc[layer]);
+                        self.network.get_layer_mut(layer).apply_b_gradients(&self.b_inc[layer]);
+                    } else if self.method == TrainMethod::NAdam {
+                        let w_m = &mut self.w_m[layer];
+                        let b_m = &mut self.b_m[layer];
 
-                    let w_v = &mut self.w_v[layer];
-                    let b_v = &mut self.b_v[layer];
+                        let w_v = &mut self.w_v[layer];
+                        let b_v = &mut self.b_v[layer];
 
-                    let w_t = &mut self.w_t[layer];
-                    let b_t = &mut self.b_t[layer];
+                        let w_t = &mut self.w_t[layer];
+                        let b_t = &mut self.b_t[layer];
 
-                    let beta1 = self.adam_beta1;
-                    let beta2 = self.adam_beta2;
-                    let schedule_decay = self.nadam_schedule_decay;
-                    let e = 1e-8;
-                    let t = self.iteration as f32;
+                        let beta1 = self.adam_beta1;
+                        let beta2 = self.adam_beta2;
+                        let schedule_decay = self.nadam_schedule_decay;
+                        let e = 1e-8;
+                        let t = self.iteration as f32;
 
-                    // Compute the schedule for momentum
+                        // Compute the schedule for momentum
 
-                    let momentum_cache_t = beta1 * (1.0 - 0.5 * (0.96_f32.powf(t * schedule_decay)));
-                    let momentum_cache_t_1 = beta1 * (1.0 - 0.5 * (0.96_f32.powf((t + 1.0) * schedule_decay)));
+                        let momentum_cache_t = beta1 * (1.0 - 0.5 * (0.96_f32.powf(t * schedule_decay)));
+                        let momentum_cache_t_1 = beta1 * (1.0 - 0.5 * (0.96_f32.powf((t + 1.0) * schedule_decay)));
 
-                    let m_schedule_new = self.schedule[layer] * momentum_cache_t;
-                    let m_schedule_next = self.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
+                        let m_schedule_new = self.schedule[layer] * momentum_cache_t;
+                        let m_schedule_next = self.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
 
-                    // We could probably not update the schedule for the biases, but it should work
-                    // fine as well that way
-                    self.schedule[layer] = m_schedule_new;
+                        // We could probably not update the schedule for the biases, but it should work
+                        // fine as well that way
+                        self.schedule[layer] = m_schedule_new;
 
-                    // Standard Adam estimations of the first and second order moments
-                    // Again, thanks to the borrow checker, we must split the expressions
+                        // Standard Adam estimations of the first and second order moments
+                        // Again, thanks to the borrow checker, we must split the expressions
 
-                    *w_m >>= cst(beta1);
-                    *w_m += cst(1.0 - beta1) >> &*w_gradients;
+                        *w_m >>= cst(beta1);
+                        *w_m += cst(1.0 - beta1) >> &*w_gradients;
 
-                    *w_v >>= cst(beta2);
-                    *w_v += cst(1.0 - beta2) >> (&*w_gradients >> &*w_gradients);
+                        *w_v >>= cst(beta2);
+                        *w_v += cst(1.0 - beta2) >> (&*w_gradients >> &*w_gradients);
 
-                    *b_m >>= cst(beta1);
-                    *b_m += cst(1.0 - beta1) >> &*b_gradients;
+                        *b_m >>= cst(beta1);
+                        *b_m += cst(1.0 - beta1) >> &*b_gradients;
 
-                    *b_v >>= cst(beta2);
-                    *b_v += cst(1.0 - beta2) >> (&*b_gradients >> &*b_gradients);
+                        *b_v >>= cst(beta2);
+                        *b_v += cst(1.0 - beta2) >> (&*b_gradients >> &*b_gradients);
 
-                    // Correct the bias towards zero of the first and second moments
-                    // For performance and memory, we inline this in the last step
+                        // Correct the bias towards zero of the first and second moments
+                        // For performance and memory, we inline this in the last step
 
-                    // Update the parameters
+                        // Update the parameters
 
-                    let f1 = 1.0 - momentum_cache_t;
-                    let f2 = 1.0 - m_schedule_new;
+                        let f1 = 1.0 - momentum_cache_t;
+                        let f2 = 1.0 - m_schedule_new;
 
-                    let m1 = eps * (f1 / f2);
-                    let m2 = eps * momentum_cache_t_1;
+                        let m1 = eps * (f1 / f2);
+                        let m2 = eps * momentum_cache_t_1;
 
-                    // Compute the gradients
+                        // Compute the gradients
 
-                    *w_t |= ((cst(m1) >> &*w_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*w_m)) / (sqrt(&*w_v / cst(1.0 - beta2.powf(t))) + cst(e));
-                    *b_t |= ((cst(m1) >> &*b_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*b_m)) / (sqrt(&*b_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                        *w_t |= ((cst(m1) >> &*w_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*w_m)) / (sqrt(&*w_v / cst(1.0 - beta2.powf(t))) + cst(e));
+                        *b_t |= ((cst(m1) >> &*b_gradients) + (cst(m2 / (1.0 - m_schedule_next)) >> &*b_m)) / (sqrt(&*b_v / cst(1.0 - beta2.powf(t))) + cst(e));
 
-                    self.network.get_layer_mut(layer).apply_w_gradients(w_t);
-                    self.network.get_layer_mut(layer).apply_b_gradients(b_t);
+                        self.network.get_layer_mut(layer).apply_w_gradients(w_t);
+                        self.network.get_layer_mut(layer).apply_b_gradients(b_t);
+                    }
                 }
             }
         }
