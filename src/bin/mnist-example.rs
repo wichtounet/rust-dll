@@ -1,6 +1,7 @@
 use dll::counters::dump_counters_pretty;
 use dll::dataset::MemoryDataset;
 use dll::dense_layer::DenseLayer;
+use dll::dropout_layer::DropoutLayer;
 use dll::mnist::*;
 use dll::network::Network;
 use dll::sgd::Sgd;
@@ -28,7 +29,9 @@ fn main() {
 
     let mut mlp = Network::new();
     mlp.add_layer(Box::new(DenseLayer::new_sigmoid(28 * 28, 500)));
+    mlp.add_layer(Box::new(DropoutLayer::new(0.5)));
     mlp.add_layer(Box::new(DenseLayer::new_sigmoid(500, 500)));
+    mlp.add_layer(Box::new(DropoutLayer::new(0.5)));
     mlp.add_layer(Box::new(DenseLayer::new_stable_softmax(500, 10)));
 
     mlp.pretty_print();

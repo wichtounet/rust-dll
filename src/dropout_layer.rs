@@ -54,7 +54,7 @@ impl Layer for DropoutLayer {
     }
 
     fn pretty_name(&self) -> String {
-        format!("Dropout ({}%)", self.probability)
+        format!("Dropout ({}%)", 100_f32 * self.probability)
     }
 
     fn output_shape(&self) -> String {
