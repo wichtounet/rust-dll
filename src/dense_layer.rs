@@ -163,4 +163,8 @@ impl Layer for DenseLayer {
     fn parameters(&self) -> usize {
         self.weights.size()
     }
+
+    fn reshapes(&self) -> bool {
+        true
+    }
 }

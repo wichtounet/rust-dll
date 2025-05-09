@@ -36,14 +36,6 @@ impl Layer for DropoutLayer {
         *output |= inv_dropout_mask(self.probability) >> input;
     }
 
-    fn new_output(&self) -> Vector<f32> {
-        Vector::<f32>::new(1)
-    }
-
-    fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32> {
-        Matrix2d::<f32>::new(batch_size, 1)
-    }
-
     fn adapt_errors(&self, _output: &Matrix2d<f32>, _errors: &mut Matrix2d<f32>) {
         // NOP
     }
@@ -57,11 +49,11 @@ impl Layer for DropoutLayer {
         format!("Dropout ({}%)", 100_f32 * self.probability)
     }
 
-    fn output_shape(&self) -> String {
-        format!("[Bx{}]", 1)
-    }
-
     fn parameters(&self) -> usize {
         0
+    }
+
+    fn reshapes(&self) -> bool {
+        false
     }
 }

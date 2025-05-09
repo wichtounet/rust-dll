@@ -32,12 +32,26 @@ pub trait Layer {
     fn adapt_errors(&self, output: &Matrix2d<f32>, errors: &mut Matrix2d<f32>);
     fn backward_batch(&self, output: &mut Matrix2d<f32>, errors: &Matrix2d<f32>);
 
-    fn new_output(&self) -> Vector<f32>;
-    fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
-
     fn pretty_name(&self) -> String;
-    fn output_shape(&self) -> String;
     fn parameters(&self) -> usize;
+    fn reshapes(&self) -> bool;
+
+    /* Only layers with a reshape need to implement new_ functions */
+
+    fn output_shape(&self) -> String {
+        assert!(!self.reshapes());
+        panic!("This layer does not reshape the input");
+    }
+
+    fn new_output(&self) -> Vector<f32> {
+        assert!(!self.reshapes());
+        panic!("This layer does not reshape the input");
+    }
+
+    fn new_batch_output(&self, _batch_size: usize) -> Matrix2d<f32> {
+        assert!(!self.reshapes());
+        panic!("This layer does not reshape the input");
+    }
 
     /* Only neural layers need to implement gradients function */
 
