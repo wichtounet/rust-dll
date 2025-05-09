@@ -35,16 +35,39 @@ pub trait Layer {
     fn new_output(&self) -> Vector<f32>;
     fn new_batch_output(&self, batch_size: usize) -> Matrix2d<f32>;
 
-    fn new_b_gradients(&self) -> Vector<f32>;
-    fn new_w_gradients(&self) -> Matrix2d<f32>;
-
-    fn compute_w_gradients(&self, gradients: &mut Matrix2d<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>);
-    fn compute_b_gradients(&self, gradients: &mut Vector<f32>, input: &Matrix2d<f32>, errors: &Matrix2d<f32>);
-
-    fn apply_w_gradients(&mut self, gradients: &Matrix2d<f32>);
-    fn apply_b_gradients(&mut self, gradients: &Vector<f32>);
-
     fn pretty_name(&self) -> String;
     fn output_shape(&self) -> String;
     fn parameters(&self) -> usize;
+
+    /* Only neural layers need to implement gradients function */
+
+    fn new_b_gradients(&self) -> Vector<f32> {
+        assert_eq!(self.parameters(), 0);
+        panic!("This layer does not have weights");
+    }
+
+    fn new_w_gradients(&self) -> Matrix2d<f32> {
+        assert_eq!(self.parameters(), 0);
+        panic!("This layer does not have weights");
+    }
+
+    fn compute_w_gradients(&self, _gradients: &mut Matrix2d<f32>, _input: &Matrix2d<f32>, _errors: &Matrix2d<f32>) {
+        assert_eq!(self.parameters(), 0);
+        panic!("This layer does not have weights");
+    }
+
+    fn compute_b_gradients(&self, _gradients: &mut Vector<f32>, _input: &Matrix2d<f32>, _errors: &Matrix2d<f32>) {
+        assert_eq!(self.parameters(), 0);
+        panic!("This layer does not have weights");
+    }
+
+    fn apply_w_gradients(&mut self, _gradients: &Matrix2d<f32>) {
+        assert_eq!(self.parameters(), 0);
+        panic!("This layer does not have weights");
+    }
+
+    fn apply_b_gradients(&mut self, _gradients: &Vector<f32>) {
+        assert_eq!(self.parameters(), 0);
+        panic!("This layer does not have weights");
+    }
 }

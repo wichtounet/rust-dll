@@ -53,22 +53,6 @@ impl Layer for DropoutLayer {
         *output |= errors;
     }
 
-    fn new_b_gradients(&self) -> Vector<f32> {
-        Vector::<f32>::new(1)
-    }
-
-    fn new_w_gradients(&self) -> Matrix2d<f32> {
-        Matrix2d::<f32>::new(1, 1)
-    }
-
-    fn compute_w_gradients(&self, _gradients: &mut Matrix2d<f32>, input_: &Matrix2d<f32>, _errors: &Matrix2d<f32>) {}
-
-    fn compute_b_gradients(&self, _gradients: &mut Vector<f32>, _input: &Matrix2d<f32>, _errors: &Matrix2d<f32>) {}
-
-    fn apply_w_gradients(&mut self, _gradients: &Matrix2d<f32>) {}
-
-    fn apply_b_gradients(&mut self, _gradients: &Vector<f32>) {}
-
     fn pretty_name(&self) -> String {
         format!("Dropout ({}%)", self.probability)
     }
