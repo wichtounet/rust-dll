@@ -30,21 +30,34 @@ impl TrainMethod {
     }
 }
 
+struct MomentumState {
+    w_inc: Vec<Matrix2d<f32>>,
+    b_inc: Vec<Vector<f32>>,
+}
+
+impl MomentumState {
+    pub fn new() -> Self {
+        Self {
+            w_inc: Vec::new(),
+            b_inc: Vec::new(),
+        }
+    }
+}
+
 pub struct Sgd<'a> {
     network: &'a mut Network,
     outputs: Vec<Option<Matrix2d<f32>>>,
     errors: Vec<Option<Matrix2d<f32>>>,
     w_gradients: Vec<Matrix2d<f32>>,
     b_gradients: Vec<Vector<f32>>,
-    w_inc: Vec<Matrix2d<f32>>, // For Momentum
-    b_inc: Vec<Vector<f32>>,   // For Momentum
-    w_m: Vec<Matrix2d<f32>>,   // For Momentum
-    b_m: Vec<Vector<f32>>,     // For Momentum
-    w_v: Vec<Matrix2d<f32>>,   // For NAdam
-    b_v: Vec<Vector<f32>>,     // For NAdam
-    w_t: Vec<Matrix2d<f32>>,   // For NAdam
-    b_t: Vec<Vector<f32>>,     // For NAdam
-    schedule: Vec<f32>,        // For NAdam
+    momentum_s: MomentumState,
+    w_m: Vec<Matrix2d<f32>>, // For NAdam
+    b_m: Vec<Vector<f32>>,   // For NAdam
+    w_v: Vec<Matrix2d<f32>>, // For NAdam
+    b_v: Vec<Vector<f32>>,   // For NAdam
+    w_t: Vec<Matrix2d<f32>>, // For NAdam
+    b_t: Vec<Vector<f32>>,   // For NAdam
+    schedule: Vec<f32>,      // For NAdam
     iteration: usize,
     batch_size: usize,
     method: TrainMethod,
@@ -76,8 +89,7 @@ impl<'a> Sgd<'a> {
             errors: Vec::new(),
             w_gradients: Vec::new(),
             b_gradients: Vec::new(),
-            w_inc: Vec::new(),
-            b_inc: Vec::new(),
+            momentum_s: MomentumState::new(),
             w_m: Vec::new(),
             b_m: Vec::new(),
             w_v: Vec::new(),
@@ -107,10 +119,12 @@ impl<'a> Sgd<'a> {
 
         // initialization of the outputs and errors
         for layer in 0..layers {
-            if trainer.network.get_layer(layer).reshapes() {
-                trainer.outputs.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
-                trainer.errors.push(Some(trainer.network.get_layer(layer).new_batch_output(batch_size)));
-                last_output = trainer.network.get_layer(layer).new_batch_output(batch_size);
+            let network_layer = trainer.network.get_layer(layer);
+
+            if network_layer.reshapes() {
+                trainer.outputs.push(Some(network_layer.new_batch_output(batch_size)));
+                trainer.errors.push(Some(network_layer.new_batch_output(batch_size)));
+                last_output = network_layer.new_batch_output(batch_size);
             } else {
                 trainer.outputs.push(Some(last_output.clone()));
                 trainer.errors.push(Some(last_output.clone()));
@@ -119,22 +133,24 @@ impl<'a> Sgd<'a> {
 
         // initialization of the gradients
         for layer in 0..layers {
-            if trainer.network.get_layer(layer).parameters() > 0 {
-                trainer.w_gradients.push(trainer.network.get_layer(layer).new_w_gradients());
-                trainer.b_gradients.push(trainer.network.get_layer(layer).new_b_gradients());
+            let network_layer = trainer.network.get_layer(layer);
+
+            if network_layer.parameters() > 0 {
+                trainer.w_gradients.push(network_layer.new_w_gradients());
+                trainer.b_gradients.push(network_layer.new_b_gradients());
 
                 if trainer.method == TrainMethod::Momentum {
-                    trainer.w_inc.push(trainer.network.get_layer(layer).new_w_gradients());
-                    trainer.b_inc.push(trainer.network.get_layer(layer).new_b_gradients());
+                    trainer.momentum_s.w_inc.push(network_layer.new_w_gradients());
+                    trainer.momentum_s.b_inc.push(network_layer.new_b_gradients());
                 }
 
                 if trainer.method == TrainMethod::NAdam {
-                    trainer.w_m.push(trainer.network.get_layer(layer).new_w_gradients());
-                    trainer.b_m.push(trainer.network.get_layer(layer).new_b_gradients());
-                    trainer.w_v.push(trainer.network.get_layer(layer).new_w_gradients());
-                    trainer.b_v.push(trainer.network.get_layer(layer).new_b_gradients());
-                    trainer.w_t.push(trainer.network.get_layer(layer).new_w_gradients());
-                    trainer.b_t.push(trainer.network.get_layer(layer).new_b_gradients());
+                    trainer.w_m.push(network_layer.new_w_gradients());
+                    trainer.b_m.push(network_layer.new_b_gradients());
+                    trainer.w_v.push(network_layer.new_w_gradients());
+                    trainer.b_v.push(network_layer.new_b_gradients());
+                    trainer.w_t.push(network_layer.new_w_gradients());
+                    trainer.b_t.push(network_layer.new_b_gradients());
                     trainer.schedule.push(1.0);
                 }
             } else {
@@ -142,8 +158,8 @@ impl<'a> Sgd<'a> {
                 trainer.b_gradients.push(Vector::new(1));
 
                 if trainer.method == TrainMethod::Momentum {
-                    trainer.w_inc.push(Matrix2d::new(1, 1));
-                    trainer.b_inc.push(Vector::new(1));
+                    trainer.momentum_s.w_inc.push(Matrix2d::new(1, 1));
+                    trainer.momentum_s.b_inc.push(Vector::new(1));
                 }
 
                 if trainer.method == TrainMethod::NAdam {
@@ -342,14 +358,14 @@ impl<'a> Sgd<'a> {
                         // in two compound operation
                         // This will have a significant performance cost
 
-                        self.w_inc[layer] >>= cst(self.momentum);
-                        self.b_inc[layer] >>= cst(self.momentum);
+                        self.momentum_s.w_inc[layer] >>= cst(self.momentum);
+                        self.momentum_s.b_inc[layer] >>= cst(self.momentum);
 
-                        self.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*w_gradients;
-                        self.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*b_gradients;
+                        self.momentum_s.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*w_gradients;
+                        self.momentum_s.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*b_gradients;
 
-                        self.network.get_layer_mut(layer).apply_w_gradients(&self.w_inc[layer]);
-                        self.network.get_layer_mut(layer).apply_b_gradients(&self.b_inc[layer]);
+                        self.network.get_layer_mut(layer).apply_w_gradients(&self.momentum_s.w_inc[layer]);
+                        self.network.get_layer_mut(layer).apply_b_gradients(&self.momentum_s.b_inc[layer]);
                     } else if self.method == TrainMethod::NAdam {
                         let w_m = &mut self.w_m[layer];
                         let b_m = &mut self.b_m[layer];
