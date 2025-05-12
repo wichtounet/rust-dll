@@ -393,12 +393,11 @@ impl<'a> Sgd<'a> {
                             // proper expressions with mut and non-mut `c`, so we must split the true operation
                             // in two compound operation
                             // This will have a significant performance cost
+                            // Instead, we use an inplace optimization (ugly, but much faster)
 
-                            self.momentum_s.w_inc[layer] >>= cst(self.momentum);
-                            self.momentum_s.b_inc[layer] >>= cst(self.momentum);
-
-                            self.momentum_s.w_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*w_gradients;
-                            self.momentum_s.b_inc[layer] += cst(eps / (self.batch_size as f32)) >> &*b_gradients;
+                            // Equivalent to inc = momentum * inc + eps / batch_size * gradients
+                            self.momentum_s.w_inc[layer].inplace_axpy(self.momentum, eps / (self.batch_size as f32), &*w_gradients);
+                            self.momentum_s.b_inc[layer].inplace_axpy(self.momentum, eps / (self.batch_size as f32), &*b_gradients);
 
                             self.network.get_layer_mut(layer).apply_w_gradients(&self.momentum_s.w_inc[layer]);
                             self.network.get_layer_mut(layer).apply_b_gradients(&self.momentum_s.b_inc[layer]);
