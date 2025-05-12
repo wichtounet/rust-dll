@@ -61,29 +61,23 @@ impl DenseLayer {
 
 impl Layer for DenseLayer {
     fn test_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
-        if self.activation == Activation::Sigmoid {
-            *output |= sigmoid(input * &self.weights + &self.biases);
-        } else if self.activation == Activation::ReLU {
-            *output |= relu(input * &self.weights + &self.biases);
-        } else if self.activation == Activation::StableSoftmax {
-            *output |= stable_softmax(input * &self.weights + &self.biases);
-        } else {
-            *output |= softmax(input * &self.weights + &self.biases);
-        }
+        match self.activation {
+            Activation::Sigmoid => *output |= sigmoid(input * &self.weights + &self.biases),
+            Activation::Softmax => *output |= softmax(input * &self.weights + &self.biases),
+            Activation::StableSoftmax => *output |= stable_softmax(input * &self.weights + &self.biases),
+            Activation::ReLU => *output |= relu(input * &self.weights + &self.biases),
+        };
     }
 
     fn test_forward_batch(&self, input: &Matrix2d<f32>, output: &mut Matrix2d<f32>) {
         let _counter = Counter::new("dense:forward");
 
-        if self.activation == Activation::Sigmoid {
-            *output |= sigmoid(bias_add(input * &self.weights, &self.biases));
-        } else if self.activation == Activation::ReLU {
-            *output |= relu(bias_add(input * &self.weights, &self.biases));
-        } else if self.activation == Activation::StableSoftmax {
-            *output |= batch_stable_softmax(bias_add(input * &self.weights, &self.biases));
-        } else {
-            *output |= batch_softmax(bias_add(input * &self.weights, &self.biases));
-        }
+        match self.activation {
+            Activation::Sigmoid => *output |= sigmoid(bias_add(input * &self.weights, &self.biases)),
+            Activation::Softmax => *output |= batch_softmax(bias_add(input * &self.weights, &self.biases)),
+            Activation::StableSoftmax => *output |= batch_stable_softmax(bias_add(input * &self.weights, &self.biases)),
+            Activation::ReLU => *output |= relu(bias_add(input * &self.weights, &self.biases)),
+        };
     }
 
     fn train_forward_one(&self, input: &Vector<f32>, output: &mut Vector<f32>) {
