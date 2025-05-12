@@ -44,13 +44,7 @@ impl MomentumState {
     }
 }
 
-pub struct Sgd<'a> {
-    network: &'a mut Network,
-    outputs: Vec<Option<Matrix2d<f32>>>,
-    errors: Vec<Option<Matrix2d<f32>>>,
-    w_gradients: Vec<Matrix2d<f32>>,
-    b_gradients: Vec<Vector<f32>>,
-    momentum_s: MomentumState,
+struct NAdamState {
     w_m: Vec<Matrix2d<f32>>, // For NAdam
     b_m: Vec<Vector<f32>>,   // For NAdam
     w_v: Vec<Matrix2d<f32>>, // For NAdam
@@ -58,6 +52,30 @@ pub struct Sgd<'a> {
     w_t: Vec<Matrix2d<f32>>, // For NAdam
     b_t: Vec<Vector<f32>>,   // For NAdam
     schedule: Vec<f32>,      // For NAdam
+}
+
+impl NAdamState {
+    pub fn new() -> Self {
+        Self {
+            w_m: Vec::new(),
+            b_m: Vec::new(),
+            w_v: Vec::new(),
+            b_v: Vec::new(),
+            w_t: Vec::new(),
+            b_t: Vec::new(),
+            schedule: Vec::new(),
+        }
+    }
+}
+
+pub struct Sgd<'a> {
+    network: &'a mut Network,
+    outputs: Vec<Option<Matrix2d<f32>>>,
+    errors: Vec<Option<Matrix2d<f32>>>,
+    w_gradients: Vec<Matrix2d<f32>>,
+    b_gradients: Vec<Vector<f32>>,
+    momentum_s: MomentumState,
+    nadam_s: NAdamState,
     iteration: usize,
     batch_size: usize,
     method: TrainMethod,
@@ -90,13 +108,7 @@ impl<'a> Sgd<'a> {
             w_gradients: Vec::new(),
             b_gradients: Vec::new(),
             momentum_s: MomentumState::new(),
-            w_m: Vec::new(),
-            b_m: Vec::new(),
-            w_v: Vec::new(),
-            b_v: Vec::new(),
-            w_t: Vec::new(),
-            b_t: Vec::new(),
-            schedule: Vec::new(),
+            nadam_s: NAdamState::new(),
             iteration: 1,
             batch_size,
             method,
@@ -145,13 +157,13 @@ impl<'a> Sgd<'a> {
                 }
 
                 if trainer.method == TrainMethod::NAdam {
-                    trainer.w_m.push(network_layer.new_w_gradients());
-                    trainer.b_m.push(network_layer.new_b_gradients());
-                    trainer.w_v.push(network_layer.new_w_gradients());
-                    trainer.b_v.push(network_layer.new_b_gradients());
-                    trainer.w_t.push(network_layer.new_w_gradients());
-                    trainer.b_t.push(network_layer.new_b_gradients());
-                    trainer.schedule.push(1.0);
+                    trainer.nadam_s.w_m.push(network_layer.new_w_gradients());
+                    trainer.nadam_s.b_m.push(network_layer.new_b_gradients());
+                    trainer.nadam_s.w_v.push(network_layer.new_w_gradients());
+                    trainer.nadam_s.b_v.push(network_layer.new_b_gradients());
+                    trainer.nadam_s.w_t.push(network_layer.new_w_gradients());
+                    trainer.nadam_s.b_t.push(network_layer.new_b_gradients());
+                    trainer.nadam_s.schedule.push(1.0);
                 }
             } else {
                 trainer.w_gradients.push(Matrix2d::new(1, 1));
@@ -163,13 +175,13 @@ impl<'a> Sgd<'a> {
                 }
 
                 if trainer.method == TrainMethod::NAdam {
-                    trainer.w_m.push(Matrix2d::new(1, 1));
-                    trainer.b_m.push(Vector::new(1));
-                    trainer.w_v.push(Matrix2d::new(1, 1));
-                    trainer.b_v.push(Vector::new(1));
-                    trainer.w_t.push(Matrix2d::new(1, 1));
-                    trainer.b_t.push(Vector::new(1));
-                    trainer.schedule.push(1.0);
+                    trainer.nadam_s.w_m.push(Matrix2d::new(1, 1));
+                    trainer.nadam_s.b_m.push(Vector::new(1));
+                    trainer.nadam_s.w_v.push(Matrix2d::new(1, 1));
+                    trainer.nadam_s.b_v.push(Vector::new(1));
+                    trainer.nadam_s.w_t.push(Matrix2d::new(1, 1));
+                    trainer.nadam_s.b_t.push(Vector::new(1));
+                    trainer.nadam_s.schedule.push(1.0);
                 }
             }
         }
@@ -367,14 +379,14 @@ impl<'a> Sgd<'a> {
                         self.network.get_layer_mut(layer).apply_w_gradients(&self.momentum_s.w_inc[layer]);
                         self.network.get_layer_mut(layer).apply_b_gradients(&self.momentum_s.b_inc[layer]);
                     } else if self.method == TrainMethod::NAdam {
-                        let w_m = &mut self.w_m[layer];
-                        let b_m = &mut self.b_m[layer];
+                        let w_m = &mut self.nadam_s.w_m[layer];
+                        let b_m = &mut self.nadam_s.b_m[layer];
 
-                        let w_v = &mut self.w_v[layer];
-                        let b_v = &mut self.b_v[layer];
+                        let w_v = &mut self.nadam_s.w_v[layer];
+                        let b_v = &mut self.nadam_s.b_v[layer];
 
-                        let w_t = &mut self.w_t[layer];
-                        let b_t = &mut self.b_t[layer];
+                        let w_t = &mut self.nadam_s.w_t[layer];
+                        let b_t = &mut self.nadam_s.b_t[layer];
 
                         let beta1 = self.adam_beta1;
                         let beta2 = self.adam_beta2;
@@ -387,12 +399,12 @@ impl<'a> Sgd<'a> {
                         let momentum_cache_t = beta1 * (1.0 - 0.5 * (0.96_f32.powf(t * schedule_decay)));
                         let momentum_cache_t_1 = beta1 * (1.0 - 0.5 * (0.96_f32.powf((t + 1.0) * schedule_decay)));
 
-                        let m_schedule_new = self.schedule[layer] * momentum_cache_t;
-                        let m_schedule_next = self.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
+                        let m_schedule_new = self.nadam_s.schedule[layer] * momentum_cache_t;
+                        let m_schedule_next = self.nadam_s.schedule[layer] * momentum_cache_t * momentum_cache_t_1;
 
                         // We could probably not update the schedule for the biases, but it should work
                         // fine as well that way
-                        self.schedule[layer] = m_schedule_new;
+                        self.nadam_s.schedule[layer] = m_schedule_new;
 
                         // Standard Adam estimations of the first and second order moments
                         // Again, thanks to the borrow checker, we must split the expressions
