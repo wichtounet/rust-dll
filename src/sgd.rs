@@ -17,6 +17,7 @@ use crate::network::Network;
 pub enum TrainMethod {
     Sgd,
     Momentum,
+    Adagrad,
     NAdam, // Nesterov Adam
 }
 
@@ -25,6 +26,7 @@ impl TrainMethod {
         match self {
             TrainMethod::Sgd => "SGD",
             TrainMethod::Momentum => "Momentum",
+            TrainMethod::Adagrad => "Adagrad",
             TrainMethod::NAdam => "Nesterov Adam",
         }
     }
@@ -43,6 +45,8 @@ impl MomentumState {
         }
     }
 }
+
+type AdagradState = MomentumState;
 
 struct NAdamState {
     w_m: Vec<Matrix2d<f32>>, // For NAdam
@@ -75,6 +79,7 @@ pub struct Sgd<'a> {
     w_gradients: Vec<Matrix2d<f32>>,
     b_gradients: Vec<Vector<f32>>,
     momentum_s: MomentumState,
+    adagrad_s: AdagradState,
     nadam_s: NAdamState,
     iteration: usize,
     batch_size: usize,
@@ -96,6 +101,10 @@ impl<'a> Sgd<'a> {
         Self::new(network, batch_size, verbose, TrainMethod::Momentum)
     }
 
+    pub fn new_adagrad(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
+        Self::new(network, batch_size, verbose, TrainMethod::Adagrad)
+    }
+
     pub fn new_nadam(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
         Self::new(network, batch_size, verbose, TrainMethod::NAdam)
     }
@@ -108,6 +117,7 @@ impl<'a> Sgd<'a> {
             w_gradients: Vec::new(),
             b_gradients: Vec::new(),
             momentum_s: MomentumState::new(),
+            adagrad_s: AdagradState::new(),
             nadam_s: NAdamState::new(),
             iteration: 1,
             batch_size,
@@ -156,6 +166,11 @@ impl<'a> Sgd<'a> {
                     trainer.momentum_s.b_inc.push(network_layer.new_b_gradients());
                 }
 
+                if trainer.method == TrainMethod::Adagrad {
+                    trainer.adagrad_s.w_inc.push(network_layer.new_w_gradients());
+                    trainer.adagrad_s.b_inc.push(network_layer.new_b_gradients());
+                }
+
                 if trainer.method == TrainMethod::NAdam {
                     trainer.nadam_s.w_m.push(network_layer.new_w_gradients());
                     trainer.nadam_s.b_m.push(network_layer.new_b_gradients());
@@ -172,6 +187,11 @@ impl<'a> Sgd<'a> {
                 if trainer.method == TrainMethod::Momentum {
                     trainer.momentum_s.w_inc.push(Matrix2d::new(1, 1));
                     trainer.momentum_s.b_inc.push(Vector::new(1));
+                }
+
+                if trainer.method == TrainMethod::Adagrad {
+                    trainer.adagrad_s.w_inc.push(Matrix2d::new(1, 1));
+                    trainer.adagrad_s.b_inc.push(Vector::new(1));
                 }
 
                 if trainer.method == TrainMethod::NAdam {
@@ -378,6 +398,20 @@ impl<'a> Sgd<'a> {
 
                         self.network.get_layer_mut(layer).apply_w_gradients(&self.momentum_s.w_inc[layer]);
                         self.network.get_layer_mut(layer).apply_b_gradients(&self.momentum_s.b_inc[layer]);
+                    } else if self.method == TrainMethod::Adagrad {
+                        let e = 1e-8;
+
+                        self.adagrad_s.w_inc[layer] += &*w_gradients >> &*w_gradients;
+                        self.adagrad_s.b_inc[layer] += &*b_gradients >> &*b_gradients;
+
+                        *w_gradients >>= cst(eps / (self.batch_size as f32));
+                        *b_gradients >>= cst(eps / (self.batch_size as f32));
+
+                        *w_gradients /= sqrt(&self.adagrad_s.w_inc[layer] + cst(e));
+                        *b_gradients /= sqrt(&self.adagrad_s.b_inc[layer] + cst(e));
+
+                        self.network.get_layer_mut(layer).apply_w_gradients(&*w_gradients);
+                        self.network.get_layer_mut(layer).apply_b_gradients(&*b_gradients);
                     } else if self.method == TrainMethod::NAdam {
                         let w_m = &mut self.nadam_s.w_m[layer];
                         let b_m = &mut self.nadam_s.b_m[layer];
