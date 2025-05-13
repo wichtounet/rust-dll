@@ -471,22 +471,16 @@ impl<'a> Sgd<'a> {
                             let beta = self.adadelta_beta;
                             let e = 1e-8;
 
-                            self.adadelta_s.w_g[layer] >>= cst(beta);
-                            self.adadelta_s.b_g[layer] >>= cst(beta);
-
-                            self.adadelta_s.w_g[layer] += cst(1.0 - beta) >> (&*w_gradients >> &*w_gradients);
-                            self.adadelta_s.b_g[layer] += cst(1.0 - beta) >> (&*b_gradients >> &*b_gradients);
+                            self.adadelta_s.w_g[layer].inplace_axpy(beta, 1.0 - beta, &*w_gradients >> &*w_gradients);
+                            self.adadelta_s.b_g[layer].inplace_axpy(beta, 1.0 - beta, &*b_gradients >> &*b_gradients);
 
                             self.adadelta_s.w_v[layer] +=
                                 (sqrt(&self.adadelta_s.w_x[layer] + cst(e)) >> &*w_gradients) / sqrt(&self.adadelta_s.w_g[layer] + cst(e));
                             self.adadelta_s.b_v[layer] +=
                                 (sqrt(&self.adadelta_s.b_x[layer] + cst(e)) >> &*b_gradients) / sqrt(&self.adadelta_s.b_g[layer] + cst(e));
 
-                            self.adadelta_s.w_x[layer] >>= cst(beta);
-                            self.adadelta_s.b_x[layer] >>= cst(beta);
-
-                            self.adadelta_s.w_x[layer] += cst(1.0 - beta) >> (&self.adadelta_s.w_v[layer] >> &self.adadelta_s.w_v[layer]);
-                            self.adadelta_s.b_x[layer] += cst(1.0 - beta) >> (&self.adadelta_s.b_v[layer] >> &self.adadelta_s.b_v[layer]);
+                            self.adadelta_s.w_x[layer].inplace_axpy(beta, 1.0 - beta, &self.adadelta_s.w_v[layer] >> &self.adadelta_s.w_v[layer]);
+                            self.adadelta_s.b_x[layer].inplace_axpy(beta, 1.0 - beta, &self.adadelta_s.b_v[layer] >> &self.adadelta_s.b_v[layer]);
 
                             self.network.get_layer_mut(layer).apply_w_gradients(&self.adadelta_s.w_v[layer]);
                             self.network.get_layer_mut(layer).apply_b_gradients(&self.adadelta_s.b_v[layer]);
