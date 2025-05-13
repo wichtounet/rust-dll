@@ -304,7 +304,7 @@ impl<'a> Sgd<'a> {
 
         dataset.reset();
         while dataset.next_batch() {
-            let (loss, error) = self.compute_metrics_batch(&dataset.input_batch(), &dataset.label_batch(), false)?;
+            let (loss, error) = self.compute_metrics_batch(dataset.input_batch(), dataset.label_batch(), false)?;
 
             global_loss += loss;
             global_error += error;
