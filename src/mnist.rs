@@ -182,3 +182,165 @@ pub fn categorical_labels_to_batches(labels: &[Vector<f32>], batch_size: usize) 
 
     batches
 }
+
+#[cfg(test)]
+mod tests {
+    use etl::etl_expr::EtlExpr;
+
+    use crate::mnist::categorical_labels_to_batches;
+    use crate::mnist::images_1d_to_batches;
+    use crate::mnist::labels_to_batches;
+    use crate::mnist::normalize_images_1d;
+    use crate::mnist::read_mnist_categorical_labels;
+    use crate::mnist::read_mnist_images_1d;
+    use crate::mnist::read_mnist_labels;
+
+    #[test]
+    fn mnist_images() {
+        let train_images = read_mnist_images_1d(true);
+        let test_images = read_mnist_images_1d(false);
+
+        assert_eq!(train_images.len(), 60000);
+        assert_eq!(test_images.len(), 10000);
+
+        for image in train_images.iter() {
+            assert_eq!(image.size(), 28 * 28);
+        }
+
+        for image in test_images.iter() {
+            assert_eq!(image.size(), 28 * 28);
+        }
+
+        for image in train_images[0..1000].iter() {
+            for pixel in image.iter() {
+                assert!((0.0..=256.0).contains(&pixel));
+            }
+        }
+
+        for image in test_images[0..1000].iter() {
+            for pixel in image.iter() {
+                assert!((0.0..=256.0).contains(&pixel));
+            }
+        }
+    }
+
+    #[test]
+    fn mnist_normalize_images() {
+        let mut train_images = read_mnist_images_1d(true);
+
+        normalize_images_1d(&mut train_images);
+
+        assert_eq!(train_images.len(), 60000);
+    }
+
+    #[test]
+    fn mnist_images_batches() {
+        let train_images = read_mnist_images_1d(true);
+        let test_images = read_mnist_images_1d(false);
+
+        assert_eq!(train_images.len(), 60000);
+        assert_eq!(test_images.len(), 10000);
+
+        let train_batches = images_1d_to_batches(&train_images, 100);
+        let test_batches = images_1d_to_batches(&test_images, 100);
+
+        assert_eq!(train_batches.len(), 600);
+        assert_eq!(test_batches.len(), 100);
+
+        for batch in train_batches.iter() {
+            assert_eq!(batch.rows(), 100);
+            assert_eq!(batch.columns(), 28 * 28);
+        }
+
+        for batch in test_batches.iter() {
+            assert_eq!(batch.rows(), 100);
+            assert_eq!(batch.columns(), 28 * 28);
+        }
+    }
+
+    #[test]
+    fn mnist_labels() {
+        let train_labels = read_mnist_labels(true);
+        let test_labels = read_mnist_labels(false);
+
+        assert_eq!(train_labels.len(), 60000);
+        assert_eq!(test_labels.len(), 10000);
+
+        for label in train_labels.iter() {
+            assert!((0.0..=9.0).contains(label));
+        }
+
+        for label in test_labels.iter() {
+            assert!((0.0..=9.0).contains(label));
+        }
+    }
+
+    #[test]
+    fn mnist_labels_cat() {
+        let train_labels = read_mnist_categorical_labels(true);
+        let test_labels = read_mnist_categorical_labels(false);
+
+        assert_eq!(train_labels.len(), 60000);
+        assert_eq!(test_labels.len(), 10000);
+
+        for label in train_labels.iter() {
+            for value in label.iter() {
+                assert!(value == 0.0 || value == 1.0);
+            }
+        }
+
+        for label in test_labels.iter() {
+            for value in label.iter() {
+                assert!(value == 0.0 || value == 1.0);
+            }
+        }
+    }
+
+    #[test]
+    fn mnist_labels_batches() {
+        let train_labels = read_mnist_labels(true);
+        let test_labels = read_mnist_labels(false);
+
+        assert_eq!(train_labels.len(), 60000);
+        assert_eq!(test_labels.len(), 10000);
+
+        let train_batches = labels_to_batches(&train_labels, 200);
+        let test_batches = labels_to_batches(&test_labels, 200);
+
+        assert_eq!(train_batches.len(), 300);
+        assert_eq!(test_batches.len(), 50);
+
+        for batch in train_batches.iter() {
+            assert_eq!(batch.rows(), 200);
+        }
+
+        for batch in test_batches.iter() {
+            assert_eq!(batch.rows(), 200);
+        }
+    }
+
+    #[test]
+    fn mnist_cat_labels_batches() {
+        let train_labels = read_mnist_categorical_labels(true);
+        let test_labels = read_mnist_categorical_labels(false);
+
+        assert_eq!(train_labels.len(), 60000);
+        assert_eq!(test_labels.len(), 10000);
+
+        let train_batches = categorical_labels_to_batches(&train_labels, 50);
+        let test_batches = categorical_labels_to_batches(&test_labels, 50);
+
+        assert_eq!(train_batches.len(), 1200);
+        assert_eq!(test_batches.len(), 200);
+
+        for batch in train_batches.iter() {
+            assert_eq!(batch.rows(), 50);
+            assert_eq!(batch.columns(), 10);
+        }
+
+        for batch in test_batches.iter() {
+            assert_eq!(batch.rows(), 50);
+            assert_eq!(batch.columns(), 10);
+        }
+    }
+}
