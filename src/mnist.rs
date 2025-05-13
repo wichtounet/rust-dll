@@ -29,7 +29,7 @@ pub fn read_mnist_images_1d(train: bool) -> Vec<Vector<f32>> {
     let rows = read_header(&data, 8) as usize;
     let columns = read_header(&data, 12) as usize;
 
-    let mut images = Vec::<Vector<f32>>::new();
+    let mut images = Vec::<Vector<f32>>::with_capacity(count);
 
     for i in 0..count {
         let mut image = Vector::<f32>::new((rows * columns) as usize);
@@ -60,11 +60,10 @@ pub fn read_mnist_labels(train: bool) -> Vec<f32> {
 
     let count = read_header(&data, 4) as usize;
 
-    let mut labels = Vec::<f32>::new();
+    let mut labels = Vec::<f32>::with_capacity(count);
 
-    for i in 0..count {
-        let label = data[8 + i] as f32;
-        labels.push(label);
+    for label in data[8..8 + count].iter() {
+        labels.push(*label as f32);
     }
 
     labels
@@ -86,12 +85,11 @@ pub fn read_mnist_categorical_labels(train: bool) -> Vec<Vector<f32>> {
 
     let count = read_header(&data, 4) as usize;
 
-    let mut labels = Vec::<Vector<f32>>::new();
+    let mut labels = Vec::<Vector<f32>>::with_capacity(count);
 
-    for i in 0..count {
+    for label in data[8..8 + count].iter() {
         let mut cat_label = Vector::<f32>::new(10); // This is initialized to zero
-        let label = data[8 + i] as usize;
-        *cat_label.at_mut(label) = 1.0;
+        *cat_label.at_mut(*label as usize) = 1.0;
         labels.push(cat_label);
     }
 
@@ -99,10 +97,7 @@ pub fn read_mnist_categorical_labels(train: bool) -> Vec<Vector<f32>> {
 }
 
 pub fn normalize_images_1d(images: &mut [Vector<f32>]) {
-    let n_images = images.len();
-
-    for i in 0..n_images {
-        let image = &mut images[i];
+    for image in images.iter_mut() {
         let size = image.size();
 
         // TODO Once rust-etl supports it on f32, use mean/stddev
@@ -113,8 +108,8 @@ pub fn normalize_images_1d(images: &mut [Vector<f32>]) {
 
         let mut s: f32 = 0.0;
 
-        for i in 0..image.size() {
-            s += image.at(i) * image.at(i);
+        for pixel in image.iter() {
+            s += pixel * pixel;
         }
 
         s = (s / (size as f32)).sqrt();
@@ -126,9 +121,9 @@ pub fn normalize_images_1d(images: &mut [Vector<f32>]) {
 }
 
 pub fn images_1d_to_batches(images: &[Vector<f32>], batch_size: usize) -> Vec<Matrix2d<f32>> {
-    let mut batches = Vec::<Matrix2d<f32>>::new();
-
     let end = (images.len() / batch_size) * batch_size;
+
+    let mut batches = Vec::<Matrix2d<f32>>::with_capacity(end);
 
     for b in (0..end).step_by(batch_size) {
         let mut batch = Matrix2d::<f32>::new(batch_size, images[b].size());
@@ -146,9 +141,9 @@ pub fn images_1d_to_batches(images: &[Vector<f32>], batch_size: usize) -> Vec<Ma
 }
 
 pub fn labels_to_batches(labels: &[f32], batch_size: usize) -> Vec<Vector<f32>> {
-    let mut batches = Vec::<Vector<f32>>::new();
-
     let end = (labels.len() / batch_size) * batch_size;
+
+    let mut batches = Vec::<Vector<f32>>::with_capacity(end);
 
     for b in (0..end).step_by(batch_size) {
         let mut batch = Vector::<f32>::new(batch_size);
@@ -164,9 +159,9 @@ pub fn labels_to_batches(labels: &[f32], batch_size: usize) -> Vec<Vector<f32>> 
 }
 
 pub fn categorical_labels_to_batches(labels: &[Vector<f32>], batch_size: usize) -> Vec<Matrix2d<f32>> {
-    let mut batches = Vec::<Matrix2d<f32>>::new();
-
     let end = (labels.len() / batch_size) * batch_size;
+
+    let mut batches = Vec::<Matrix2d<f32>>::with_capacity(end);
 
     for b in (0..end).step_by(batch_size) {
         let mut batch = Matrix2d::<f32>::new(batch_size, 10);
