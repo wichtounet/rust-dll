@@ -18,6 +18,7 @@ pub enum TrainMethod {
     Sgd,
     Momentum,
     Adagrad,
+    Adadelta,
     NAdam, // Nesterov Adam
 }
 
@@ -27,6 +28,7 @@ impl TrainMethod {
             TrainMethod::Sgd => "SGD",
             TrainMethod::Momentum => "Momentum",
             TrainMethod::Adagrad => "Adagrad",
+            TrainMethod::Adadelta => "Adadelta",
             TrainMethod::NAdam => "Nesterov Adam",
         }
     }
@@ -48,14 +50,36 @@ impl MomentumState {
 
 type AdagradState = MomentumState;
 
+struct AdadeltaState {
+    w_g: Vec<Matrix2d<f32>>,
+    b_g: Vec<Vector<f32>>,
+    w_x: Vec<Matrix2d<f32>>,
+    b_x: Vec<Vector<f32>>,
+    w_v: Vec<Matrix2d<f32>>,
+    b_v: Vec<Vector<f32>>,
+}
+
+impl AdadeltaState {
+    pub fn new() -> Self {
+        Self {
+            w_g: Vec::new(),
+            b_g: Vec::new(),
+            w_x: Vec::new(),
+            b_x: Vec::new(),
+            w_v: Vec::new(),
+            b_v: Vec::new(),
+        }
+    }
+}
+
 struct NAdamState {
-    w_m: Vec<Matrix2d<f32>>, // For NAdam
-    b_m: Vec<Vector<f32>>,   // For NAdam
-    w_v: Vec<Matrix2d<f32>>, // For NAdam
-    b_v: Vec<Vector<f32>>,   // For NAdam
-    w_t: Vec<Matrix2d<f32>>, // For NAdam
-    b_t: Vec<Vector<f32>>,   // For NAdam
-    schedule: Vec<f32>,      // For NAdam
+    w_m: Vec<Matrix2d<f32>>,
+    b_m: Vec<Vector<f32>>,
+    w_v: Vec<Matrix2d<f32>>,
+    b_v: Vec<Vector<f32>>,
+    w_t: Vec<Matrix2d<f32>>,
+    b_t: Vec<Vector<f32>>,
+    schedule: Vec<f32>,
 }
 
 impl NAdamState {
@@ -80,6 +104,7 @@ pub struct Sgd<'a> {
     b_gradients: Vec<Vector<f32>>,
     momentum_s: MomentumState,
     adagrad_s: AdagradState,
+    adadelta_s: AdadeltaState,
     nadam_s: NAdamState,
     iteration: usize,
     batch_size: usize,
@@ -89,6 +114,7 @@ pub struct Sgd<'a> {
     adam_beta1: f32,
     adam_beta2: f32,
     nadam_schedule_decay: f32,
+    adadelta_beta: f32,
     verbose: bool,
 }
 
@@ -105,6 +131,10 @@ impl<'a> Sgd<'a> {
         Self::new(network, batch_size, verbose, TrainMethod::Adagrad)
     }
 
+    pub fn new_adadelta(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
+        Self::new(network, batch_size, verbose, TrainMethod::Adadelta)
+    }
+
     pub fn new_nadam(network: &'a mut Network, batch_size: usize, verbose: bool) -> Self {
         Self::new(network, batch_size, verbose, TrainMethod::NAdam)
     }
@@ -118,6 +148,7 @@ impl<'a> Sgd<'a> {
             b_gradients: Vec::new(),
             momentum_s: MomentumState::new(),
             adagrad_s: AdagradState::new(),
+            adadelta_s: AdadeltaState::new(),
             nadam_s: NAdamState::new(),
             iteration: 1,
             batch_size,
@@ -127,6 +158,7 @@ impl<'a> Sgd<'a> {
             adam_beta1: 0.9,
             adam_beta2: 0.999,
             nadam_schedule_decay: 0.004,
+            adadelta_beta: 0.95,
             verbose,
         };
 
@@ -171,6 +203,14 @@ impl<'a> Sgd<'a> {
                         trainer.adagrad_s.w_inc.push(network_layer.new_w_gradients());
                         trainer.adagrad_s.b_inc.push(network_layer.new_b_gradients());
                     }
+                    TrainMethod::Adadelta => {
+                        trainer.adadelta_s.w_g.push(network_layer.new_w_gradients());
+                        trainer.adadelta_s.b_g.push(network_layer.new_b_gradients());
+                        trainer.adadelta_s.w_x.push(network_layer.new_w_gradients());
+                        trainer.adadelta_s.b_x.push(network_layer.new_b_gradients());
+                        trainer.adadelta_s.w_v.push(network_layer.new_w_gradients());
+                        trainer.adadelta_s.b_v.push(network_layer.new_b_gradients());
+                    }
                     TrainMethod::NAdam => {
                         trainer.nadam_s.w_m.push(network_layer.new_w_gradients());
                         trainer.nadam_s.b_m.push(network_layer.new_b_gradients());
@@ -194,6 +234,14 @@ impl<'a> Sgd<'a> {
                     TrainMethod::Adagrad => {
                         trainer.adagrad_s.w_inc.push(Matrix2d::new(1, 1));
                         trainer.adagrad_s.b_inc.push(Vector::new(1));
+                    }
+                    TrainMethod::Adadelta => {
+                        trainer.adadelta_s.w_g.push(Matrix2d::new(1, 1));
+                        trainer.adadelta_s.b_g.push(Vector::new(1));
+                        trainer.adadelta_s.w_x.push(Matrix2d::new(1, 1));
+                        trainer.adadelta_s.b_x.push(Vector::new(1));
+                        trainer.adadelta_s.w_v.push(Matrix2d::new(1, 1));
+                        trainer.adadelta_s.b_v.push(Vector::new(1));
                     }
                     TrainMethod::NAdam => {
                         trainer.nadam_s.w_m.push(Matrix2d::new(1, 1));
@@ -416,6 +464,32 @@ impl<'a> Sgd<'a> {
 
                             self.network.get_layer_mut(layer).apply_w_gradients(&*w_gradients);
                             self.network.get_layer_mut(layer).apply_b_gradients(&*b_gradients);
+                        }
+                        TrainMethod::Adadelta => {
+                            // TODO This currently does not work
+
+                            let beta = self.adadelta_beta;
+                            let e = 1e-8;
+
+                            self.adadelta_s.w_g[layer] >>= cst(beta);
+                            self.adadelta_s.b_g[layer] >>= cst(beta);
+
+                            self.adadelta_s.w_g[layer] += cst(1.0 - beta) >> (&*w_gradients >> &*w_gradients);
+                            self.adadelta_s.b_g[layer] += cst(1.0 - beta) >> (&*b_gradients >> &*b_gradients);
+
+                            self.adadelta_s.w_v[layer] +=
+                                (sqrt(&self.adadelta_s.w_x[layer] + cst(e)) >> &*w_gradients) / sqrt(&self.adadelta_s.w_g[layer] + cst(e));
+                            self.adadelta_s.b_v[layer] +=
+                                (sqrt(&self.adadelta_s.b_x[layer] + cst(e)) >> &*b_gradients) / sqrt(&self.adadelta_s.b_g[layer] + cst(e));
+
+                            self.adadelta_s.w_x[layer] >>= cst(beta);
+                            self.adadelta_s.b_x[layer] >>= cst(beta);
+
+                            self.adadelta_s.w_x[layer] += cst(1.0 - beta) >> (&self.adadelta_s.w_v[layer] >> &self.adadelta_s.w_v[layer]);
+                            self.adadelta_s.b_x[layer] += cst(1.0 - beta) >> (&self.adadelta_s.b_v[layer] >> &self.adadelta_s.b_v[layer]);
+
+                            self.network.get_layer_mut(layer).apply_w_gradients(&self.adadelta_s.w_v[layer]);
+                            self.network.get_layer_mut(layer).apply_b_gradients(&self.adadelta_s.b_v[layer]);
                         }
                         TrainMethod::NAdam => {
                             let w_m = &mut self.nadam_s.w_m[layer];
